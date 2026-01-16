@@ -39,11 +39,20 @@ LIMIT 30;
 SELECT
     database,
     table,
-    count() AS parts,
-    formatReadableSize(sum(bytes_on_disk)) AS bytes_on_disk,
-    max(modification_time) AS last_part_time
-FROM system.parts
-WHERE active
-GROUP BY database, table
+    parts,
+    formatReadableSize(bytes_on_disk_sum) AS bytes_on_disk,
+    last_part_time
+FROM
+(
+    SELECT
+        database,
+        table,
+        count() AS parts,
+        sum(bytes_on_disk) AS bytes_on_disk_sum,
+        max(modification_time) AS last_part_time
+    FROM system.parts
+    WHERE active
+    GROUP BY database, table
+)
 ORDER BY parts DESC
 LIMIT 30;

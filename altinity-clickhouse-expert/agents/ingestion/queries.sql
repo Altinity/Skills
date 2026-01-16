@@ -34,8 +34,8 @@ SELECT
     table,
     count() AS new_parts,
     round(new_parts / 3600.0, 3) AS new_parts_per_sec,
-    formatReadableSize(quantile(0.5)(part_size)) AS p50_part_size,
-    formatReadableSize(quantile(0.9)(part_size)) AS p90_part_size,
+    formatReadableSize(quantile(0.5)(size_in_bytes)) AS p50_part_size,
+    formatReadableSize(quantile(0.9)(size_in_bytes)) AS p90_part_size,
     multiIf(new_parts_per_sec > 5, 'Critical', new_parts_per_sec > 1, 'Major', new_parts_per_sec > 0.5, 'Moderate', 'OK') AS severity
 FROM clusterAllReplicas('{cluster}', system.part_log)
 WHERE event_time > now() - INTERVAL 1 HOUR
@@ -52,8 +52,8 @@ SELECT
     database,
     table,
     count() AS new_parts,
-    formatReadableSize(quantile(0.5)(part_size)) AS p50_part_size,
-    formatReadableSize(quantile(0.9)(part_size)) AS p90_part_size
+    formatReadableSize(quantile(0.5)(size_in_bytes)) AS p50_part_size,
+    formatReadableSize(quantile(0.9)(size_in_bytes)) AS p90_part_size
 FROM clusterAllReplicas('{cluster}', system.part_log)
 WHERE event_time > now() - INTERVAL 24 HOUR
   AND event_type = 'NewPart'

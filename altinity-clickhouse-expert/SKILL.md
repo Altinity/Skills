@@ -20,8 +20,8 @@ Choose a backend using these rules:
 - BACKEND-MCP.md  use when you **cannot spawn/exec** processes and **cannot run** `clickhouse-client`, but you **do** have an MCP ClickHouse connector tool available (WebUI-style environments).
 - BACKEND-CLI.md  use when you **can spawn/exec** locally and have `clickhouse-client` available (terminal/SSH environments).
 
-If you’re unsure, prefer **MCP** when process spawning is restricted; prefer **CLI** when you can run shell commands.
-
+Prefer BACKEND-CLI when a spawn/exec tool is available.
+Prefer BACKEND-MCP when process spawning is restricted or as a fallback if clickhouse-client is not available or has connectivity problems.
 
 ## Map symptoms to agents (wave 1 → wave 2+)
 
@@ -79,15 +79,6 @@ When coordinating as an LLM, prefer this loop over a fixed “run everything” 
 Each agent has two files in `agents/<name>/`:
 - `queries.sql` - SQL queries executed by the selected backend (semicolon-delimited)
 - `prompt.md` - Analysis prompt with severity rules and output format
-
-## Cluster Mode
-
-Agent `queries.sql` may include cluster wrappers in the canonical form:
-```sql
-SELECT ... FROM clusterAllReplicas('{cluster}', system.table) ...
-```
-
-Cluster wrapper execution differs by backend; see `BACKEND-CLI.md` / `BACKEND-MCP.md` for the exact rules (zookeeper detection, macro probe, unwrap rules, and explicit cluster override).
 
 ## Output Format
 

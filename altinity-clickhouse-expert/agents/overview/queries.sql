@@ -21,19 +21,28 @@ WHERE is_cancelled = 0;
 SELECT
     database,
     table,
-    count() AS parts,
-    formatReadableSize(sum(bytes_on_disk)) AS bytes_on_disk,
-    max(modification_time) AS last_part_time
-FROM system.parts
-WHERE active
-GROUP BY database, table
+    parts,
+    formatReadableSize(bytes_on_disk_sum) AS bytes_on_disk,
+    last_part_time
+FROM
+(
+    SELECT
+        database,
+        table,
+        count() AS parts,
+        sum(bytes_on_disk) AS bytes_on_disk_sum,
+        max(modification_time) AS last_part_time
+    FROM system.parts
+    WHERE active
+    GROUP BY database, table
+)
 ORDER BY parts DESC
 LIMIT 20;
 
 -- Query 4: Errors trend (last 24h)
 SELECT
     toStartOfHour(event_time) AS hour,
-    countIf(type LIKE 'Exception%') AS exceptions,
+    countIf(type > 2) AS exceptions,
     countIf(type = 'QueryFinish') AS finished
 FROM clusterAllReplicas('{cluster}', system.query_log)
 WHERE event_time > now() - INTERVAL 24 HOUR

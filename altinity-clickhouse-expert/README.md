@@ -1,4 +1,4 @@
-# clickhouse-analyst
+# Altinity Clickhouse Expert 
 
 ClickHouse incident response + periodic audits + ad-hoc debugging via **parallel sub-agents**.
 
@@ -26,6 +26,7 @@ Works in two environments:
 - `CLAUDE.md`: architecture overview for developers
 - `scripts/run-agent.sh`: run one agent (SQL → LLM → JSON) - CLI backend only
 - `scripts/run-parallel.sh`: run multiple agents in parallel - CLI backend only
+- `scripts/run-all-dry.sh`: run all agents in dry-run mode (SQL only)
 - `agents/<name>/{queries.sql,prompt.md}`: per-domain query set + analysis prompt
 - `schemas/finding.json`: JSON schema for agent output validation
 - `modules/*.md`: legacy reference docs (not executed by agents)
@@ -41,21 +42,9 @@ scripts/run-agent.sh memory "OOM at 14:30" -- --host=prod-ch --user=admin
 
 # Multiple agents (parallel)
 scripts/run-parallel.sh "slow queries" -- --host=prod-ch --agents reporting memory
-```
 
-## Cluster wrappers (`clusterAllReplicas`)
-
-Some agent `queries.sql` use `clusterAllReplicas('{cluster}', system.<table>)` for per-node system tables (especially `*_log` tables).
-
-`scripts/run-agent.sh` keeps these wrappers only when `system.zookeeper_connection` is active. Otherwise it unwraps them to local `system.<table>` so the run still works on standalone servers.
-
-Override behavior:
-```bash
-# Force single-node (unwrap all clusterAllReplicas wrappers)
-scripts/run-agent.sh reporting "single node check" --single-node
-
-# Replace {cluster} with an explicit cluster name (still unwraps if zookeeper is inactive)
-scripts/run-agent.sh reporting "cluster override" --cluster-name my_cluster
+# All agents (dry-run, SQL only)
+scripts/run-all-dry.sh -- --host=prod-ch
 ```
 
 ## ClickHouse connection

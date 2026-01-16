@@ -1,7 +1,7 @@
 #!/bin/bash
 # Run multiple ClickHouse analyst agents in parallel
 # Usage:
-#   ./run-parallel.sh <context> [--llm-provider <claude|codex|gemini>] [--llm-model <name>] [--timeout <secs>] [-- <clickhouse-client args...>] --agents <agent1> [agent2...]
+#   ./run-parallel.sh <context> [--llm-provider <claude|codex|gemini>] [--llm-model <name>] [--dry-run] [--timeout <secs>] [-- <clickhouse-client args...>] --agents <agent1> [agent2...]
 #
 # Back-compat (legacy, stringly args):
 #   ./run-parallel.sh <context> "<ch-args>" <agent1> [agent2...]
@@ -15,8 +15,13 @@
 
 set -euo pipefail
 
+# All writes should stay under the invocation directory (PWD).
+WORK_ROOT="$PWD"
+AGENTS_HOME="${WORK_ROOT}/.agents"
+mkdir -p "$AGENTS_HOME/tmp"
+
 usage() {
-    echo "Usage: $0 <context> [--llm-provider <claude|codex|gemini>] [--llm-model <name>] [--timeout <secs>] -- <clickhouse-client args...> --agents <agent1> [agent2...]" >&2
+    echo "Usage: $0 <context> [--llm-provider <claude|codex|gemini>] [--llm-model <name>] [--dry-run] [--timeout <secs>] -- <clickhouse-client args...> --agents <agent1> [agent2...]" >&2
 }
 
 CONTEXT="${1:-}"
@@ -25,6 +30,7 @@ shift 1 || true
 
 LLM_PROVIDER=""
 LLM_MODEL=""
+DRY_RUN=0
 PARALLEL_TIMEOUT="${CH_ANALYST_PARALLEL_TIMEOUT_SEC:-300}"
 CH_ARGS=()
 AGENTS=()
@@ -42,6 +48,7 @@ else
         case "$1" in
             --llm-provider) LLM_PROVIDER="${2:-}"; shift 2 || true ;;
             --llm-model) LLM_MODEL="${2:-}"; shift 2 || true ;;
+            --dry-run) DRY_RUN=1; shift ;;
             --timeout) PARALLEL_TIMEOUT="${2:-}"; shift 2 || true ;;
             --)
                 shift
@@ -72,13 +79,13 @@ if [[ ${#AGENTS[@]} -eq 0 ]]; then
 fi
 
 	# Resolve paths relative to the skill root so the script works from any CWD.
-	SCRIPT_PATH="${BASH_SOURCE[0]:-$0}"
-	SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
-	SKILL_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-	OUTPUT_DIR=$(mktemp -d)
-	trap 'rm -rf "$OUTPUT_DIR"' EXIT
-	PIDS=()
-	START_TIME=$(date +%s)
+		SCRIPT_PATH="${BASH_SOURCE[0]:-$0}"
+		SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+		SKILL_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+		OUTPUT_DIR=$(mktemp -d "${AGENTS_HOME}/tmp/run-parallel.XXXXXX")
+		trap 'rm -rf "$OUTPUT_DIR"' EXIT
+		PIDS=()
+		START_TIME=$(date +%s)
 
 # Spawn agents in background
 for AGENT in "${AGENTS[@]}"; do
@@ -91,6 +98,7 @@ for AGENT in "${AGENTS[@]}"; do
 	        cmd=( "$SKILL_ROOT/scripts/run-agent.sh" "$AGENT" "$CONTEXT" )
         [[ -n "$LLM_PROVIDER" ]] && cmd+=( --llm-provider "$LLM_PROVIDER" )
         [[ -n "$LLM_MODEL" ]] && cmd+=( --llm-model "$LLM_MODEL" )
+        [[ "$DRY_RUN" == "1" ]] && cmd+=( --dry-run )
         cmd+=( -- ${CH_ARGS[@]+"${CH_ARGS[@]}"} )
         "${cmd[@]}" >"$OUT_FILE" 2>"$ERR_FILE"
         echo $? >"$STATUS_FILE"
@@ -149,7 +157,11 @@ for AGENT in "${AGENTS[@]}"; do
     echo "    {"
     echo "      \"name\": $(printf '%s' "$AGENT" | json_escape),"
     echo "      \"exit_code\": $exit_code,"
-    if [[ "$exit_code" == "0" ]] && jq -e . >/dev/null 2>&1 <"$out_file"; then
+    if [[ "$DRY_RUN" == "1" ]] && [[ "$exit_code" == "0" ]]; then
+        echo "      \"ok\": true,"
+        echo "      \"output\": null,"
+        echo "      \"output_raw\": $(cat "$out_file" 2>/dev/null | json_escape),"
+    elif [[ "$exit_code" == "0" ]] && jq -e . >/dev/null 2>&1 <"$out_file"; then
         echo "      \"ok\": true,"
         echo "      \"output\": $(cat "$out_file"),"
         echo "      \"output_raw\": null,"

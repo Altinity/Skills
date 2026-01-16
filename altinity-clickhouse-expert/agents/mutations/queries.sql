@@ -7,7 +7,6 @@ SELECT
     create_time,
     is_done,
     parts_to_do,
-    parts_done,
     latest_failed_part,
     latest_fail_time,
     latest_fail_reason
@@ -23,4 +22,3 @@ WHERE (latest_fail_time > now() - INTERVAL 24 HOUR)
   AND latest_fail_reason != ''
 ORDER BY latest_fail_time DESC
 LIMIT 100;
-

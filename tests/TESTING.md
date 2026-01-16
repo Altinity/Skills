@@ -27,7 +27,7 @@ scripts/run-agent.sh --test-connection -- --host=<host> --user=<user>
 ### 1) Script sanity
 
 ```bash
-bash -n scripts/run-agent.sh scripts/run-parallel.sh
+bash -n scripts/run-agent.sh scripts/run-parallel.sh scripts/run-all-dry.sh
 jq -e . schemas/finding.json >/dev/null
 ```
 
@@ -35,9 +35,6 @@ jq -e . schemas/finding.json >/dev/null
 
 ```bash
 scripts/run-agent.sh overview "health check"
-
-# Optional: force single-node mode (unwrap any clusterAllReplicas wrappers in agent SQL)
-scripts/run-agent.sh overview "health check" --single-node
 ```
 
 ### 3) Parallel fan-out (LLM-independent option)
@@ -46,7 +43,18 @@ scripts/run-agent.sh overview "health check" --single-node
 scripts/run-parallel.sh "health check" -- --agents overview metrics
 ```
 
-### 4) Artifacts + timeout knobs
+### 4) All agents (dry-run, SQL only)
+
+```bash
+scripts/run-all-dry.sh
+```
+
+Or with Make:
+```bash
+make test
+```
+
+### 5) Artifacts + timeout knobs
 
 ```bash
 export CH_ANALYST_KEEP_ARTIFACTS=1

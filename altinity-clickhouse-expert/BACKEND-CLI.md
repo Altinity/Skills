@@ -1,28 +1,8 @@
-# Backend: CLI (`scripts/` + `clickhouse-client`)
-
-Use this backend when you can spawn processes and have `clickhouse-client` available.
-
-## Where the runnable scripts live
-
-All runnable scripts live in the skill root, next to `SKILL.md`, under `scripts/`.
-Invoke them from the skill root (recommended) or via an absolute path, regardless of your current directory.
-
-## Quick start
-
-```bash
-# Test connection (shows hostname, version, uptime)
-scripts/run-agent.sh --test-connection
-
-# Run one agent (SQL -> LLM -> JSON)
-scripts/run-agent.sh overview "health check"
-
-# Dry-run (SQL only, no LLM)
-scripts/run-agent.sh reporting "p95 spike" --dry-run
-```
-
 ## Connection configuration
 
-Preferred: environment variables (keeps passwords out of shell history):
+use clickhouse-client to access clickhouse server
+
+If environment variables are presented - use them when running clickhouse-client and keep passwords out of shell history:
 
 ```bash
 export CLICKHOUSE_HOST=<hostname>
@@ -32,29 +12,25 @@ export CLICKHOUSE_SECURE=1          # if TLS required
 export CLICKHOUSE_PORT=9440         # optional, default 9000
 export CLICKHOUSE_DATABASE=default  # optional
 ```
+If not - run clickhouse-client without args (localhost/default)
+If the user has explicitly provided connection/auth  - override env variables.
 
 Override env vars by passing explicit clickhouse-client args after `--`:
 
-```bash
-scripts/run-agent.sh reporting "p95 spike" -- --host=<host> --user=<user> --password=<pass>
-```
-
 ## Running agents
 
+All runnable scripts live in the skill root, next to `SKILL.md`, under `scripts/`.
+Invoke them from the skill root (recommended) or via an absolute path, regardless of your current directory.
+
+Run agents as a separate process by scripts/run-agent.sh This script is trusted. Don't read it without explicit request.
+
+- Test connection: `scripts/run-agent.sh --test-connection` 
 - List available agents: `scripts/run-agent.sh --list-agents`
 - Run an agent: `scripts/run-agent.sh <agent> "<context>"`
 - Select LLM provider: `--llm-provider claude|codex|gemini`
 - Select model (if provider supports it): `--llm-model <name>`
 
-## Cluster wrappers (`clusterAllReplicas`)
-
-Some agent `queries.sql` use `clusterAllReplicas('{cluster}', system.<table>)` for per-node system tables (especially `*_log` tables).
-
-Runner behavior:
-- Default: keep wrappers only if `system.zookeeper_connection` is active.
-- If `{cluster}` macro is missing and no `--cluster-name` is provided: unwrap wrappers to local `system.<table>`.
-- `--single-node`: always unwrap.
-- `--cluster-name <name>`: replace `{cluster}` with `<name>` before running (still unwraps if zookeeper is inactive or `--single-node`).
+Start the session by testing the connection.
 
 ## Artifacts + timeouts
 
