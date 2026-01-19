@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(make list:*)",
+      "Bash(make)",
+      "Bash(chmod:*)",
+      "Bash(bash:*)",
+      "Bash(make help:*)",
+      "Bash(export CLICKHOUSE_USER=\"default\")",
+      "Bash(export CLICKHOUSE_HOST=arm)",
+      "Bash(export CLICKHOUSE_PASSWORD=\"prikol1967\")",
+      "Bash(export CLICKHOUSE_PORT=9440)",
+      "Bash(export CLICKHOUSE_SECURE=true)",
+      "Bash(make validate:*)",
+      "Bash(make setup-memory:*)",
+      "Bash(make clean-db:*)",
+      "Bash(make test-memory-no-verify:*)"
+    ]
+  }
+}
