@@ -263,3 +263,9 @@ For each test:
 - [ ] `chain_to` suggestions are relevant
 - [ ] Recommendations are actionable
 - [ ] No sensitive data leaked in output
+
+
+
+echo "Review the table design for the largest tables in clickhouse eth database. Look for partitioning issues, bad ORDER BY choices, or problematic materialized views. Check query performance." | codex -a never exec -s workspace-write --skip-git-repo-check
+
+ echo "exact slow‑query fingerprints and MV duration stats from `system.query_log` / `system.query_views_log` and propose concrete projection or MV changes. use prev runs and reports in altinity-clickhouse-expert directory"|  codex -a never exec -s workspace-write --skip-git-repo-check

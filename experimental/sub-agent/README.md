@@ -115,6 +115,11 @@ scripts/run-agent.sh reporting "p95 spike" --llm-provider gemini -- --host=prod-
 scripts/run-agent.sh reporting "p95 spike" --llm-provider codex -- --host=prod-ch
 ```
 
+Sub-agents run with minimal permissions (analysis-only, no file/network access):
+- **Claude Code**: `--tools ""` (all tools disabled)
+- **Codex**: `-a never -s workspace-write` (no auto-approve, limited scope)
+- **Gemini**: stdin/stdout only
+
 ## Runtime knobs
 
 ```bash

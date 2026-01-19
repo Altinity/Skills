@@ -183,8 +183,10 @@ run_llm_once() {
 
     case "$provider" in
         claude)
-            # Keep current invocation (known-good).
-            claude --print --dangerously-skip-permissions -p "$prompt" 2>/dev/null
+            # Disable all tools since sub-agent only analyzes data and returns JSON.
+            # Uses --tools "" for a minimal permission footprint (similar to Codex's
+            # "-a never -s workspace-write").
+            claude --print --tools "" -p "$prompt" 2>/dev/null
             ;;
         codex)
             # Run Codex with a writable HOME in the current working directory so it can create

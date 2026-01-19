@@ -1,0 +1,12 @@
+# Test outputs
+reports/*
+results/*
+
+# Environment files (contain credentials)
+.env
+.env.local
+.env.*.local
+
+# Temporary files
+*.tmp
+*.log

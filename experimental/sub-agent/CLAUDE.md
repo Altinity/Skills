@@ -153,6 +153,10 @@ scripts/run-agent.sh memory "OOM at 14:30"
 # Or with explicit args (override env vars)
 scripts/run-agent.sh memory "OOM at 14:30" -- --host=localhost --user=admin
 
+# Select LLM provider (default: codex)
+scripts/run-agent.sh memory "OOM" --llm-provider claude
+scripts/run-agent.sh memory "OOM" --llm-provider gemini
+
 # Dry-run (SQL only, no LLM) for debugging
 scripts/run-agent.sh memory "OOM at 14:30" --dry-run
 
@@ -227,3 +231,15 @@ Each agent returns:
 - **Adaptive**: Run agents iteratively, follow `chain_to`, stop when root cause is clear
 - **Cheap**: LLM only analyzes results, doesn't execute queries
 - **Debuggable**: SQL files can be tested independently (`--dry-run` in CLI, manual MCP calls in Web)
+
+## LLM Provider Security
+
+Sub-agents run with minimal permissions since they only need to analyze data and return JSON:
+
+| Provider | Permission Model |
+|----------|-----------------|
+| Claude Code | `--tools ""` (all tools disabled) |
+| Codex | `-a never -s workspace-write` (no auto-approve, limited scope) |
+| Gemini | stdin/stdout only (no tool access) |
+
+This ensures sub-agents cannot modify files, execute commands, or access the network.
