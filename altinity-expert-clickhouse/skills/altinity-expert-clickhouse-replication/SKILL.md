@@ -157,6 +157,10 @@ order by last_attempt_time desc
 limit 50
 ```
 
+### NO_REPLICA_HAS_PART
+
+Such type of errors should be considered differently depending on the part name suffix. For _0 and _1 suffixes (example: 20240518_71684_71689_1), it should be considered as normal behaviour of the replication process on big insert load. For suffixes greater than "_1" it can be a sign of the replication problem.
+
 ---
 
 ## Keeper/ZooKeeper Diagnostics
