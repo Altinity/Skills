@@ -32,11 +32,13 @@ Use it consistently for `system.errors` and for scanning all `system.*_log` tabl
 
 ## System Identification
 
+If a connection recommendation is not provided explicitly, ask the user to choose the MCP server from the list or 
+ask for connection details for clickhouse-client .
+
 ```sql
 select
     hostName() as hostname,
     version() as version,
-    uptime() as uptime_seconds,
     formatReadableTimeDelta(uptime()) as uptime_human,
     getSetting('max_memory_usage') as max_memory_usage,
     (select value from system.asynchronous_metrics where metric = 'OSMemoryTotal') as os_memory_total
@@ -151,43 +153,43 @@ order by used_pct desc
 ```sql
 select
     'Readonly Replicas' as check_name,
-    (select value from system.metrics where metric = 'ReadonlyReplica') as value,
+    toFloat64((select value from system.metrics where metric = 'ReadonlyReplica')) as value,
     if(value > 0, 'Critical', 'OK') as severity
 
 union all
 
 select
     'Max Replica Delay' as check_name,
-    (select max(value) from system.asynchronous_metrics where metric in ('ReplicasMaxAbsoluteDelay', 'ReplicasMaxRelativeDelay')) as value,
+    toFloat64((select max(value) from system.asynchronous_metrics where metric in ('ReplicasMaxAbsoluteDelay', 'ReplicasMaxRelativeDelay'))) as value,
     multiIf(value > 86400, 'Critical', value > 10800, 'Major', value > 1800, 'Moderate', 'OK') as severity
 
 union all
 
 select
     'Replication Queue Size' as check_name,
-    (select value from system.asynchronous_metrics where metric = 'ReplicasSumQueueSize') as value,
+    toFloat64((select value from system.asynchronous_metrics where metric = 'ReplicasSumQueueSize')) as value,
     multiIf(value > 500, 'Major', value > 200, 'Moderate', 'OK') as severity
 ```
 
 ### Background Pool Status
 
 ```sql
+with
+    transform(extract(metric, '^Background(.*)PoolTask'),
+        ['MergesAndMutations', 'Fetches', 'Move', 'Common', 'Schedule', 'BufferFlushSchedule', 'MessageBrokerSchedule', 'DistributedSchedule'],
+        ['pool', 'fetches_pool', 'move_pool', 'common_pool', 'schedule_pool', 'buffer_flush_schedule_pool', 'message_broker_schedule_pool', 'distributed_schedule_pool'],
+        ''
+    ) as pool_key,
+    concat('background_', lower(pool_key), '_size') as setting_name
 select
-    extract(metric, '^Background(.*)Task') as pool_name,
-    value as active_tasks,
-    (
-        select toFloat64(value) from system.settings
-        where name = concat('background_', lower(
-            transform(extract(metric, '^Background(.*)PoolTask'),
-                ['MergesAndMutations', 'Fetches', 'Move', 'Common', 'Schedule', 'BufferFlushSchedule', 'MessageBrokerSchedule', 'DistributedSchedule'],
-                ['pool', 'fetches_pool', 'move_pool', 'common_pool', 'schedule_pool', 'buffer_flush_schedule_pool', 'message_broker_schedule_pool', 'distributed_schedule_pool'],
-                '')
-        ), '_size')
-    ) as pool_size,
-    round(100.0 * value / pool_size, 1) as utilization_pct,
+    extract(m.metric, '^Background(.*)Task') as pool_name,
+    m.value as active_tasks,
+    toFloat64OrZero(s.value) as pool_size,
+    round(100.0 * m.value / pool_size, 1) as utilization_pct,
     multiIf(utilization_pct > 99, 'Major', utilization_pct > 90, 'Moderate', 'OK') as severity
-from system.metrics
-where metric like 'Background%PoolTask'
+from system.metrics m
+left join system.settings s on s.name = setting_name
+where m.metric like 'Background%PoolTask'
   and pool_size > 0
 order by utilization_pct desc
 ```
@@ -199,13 +201,19 @@ order by utilization_pct desc
 ```sql
 with
     (select value from system.build_options where name = 'VERSION_DESCRIBE') as current_version,
-    toDate(extract(current_version, '\\d{4}-\\d{2}-\\d{2}')) as version_date,
-    today() - version_date as age_days
+    nullIf((select value from system.build_options where name = 'BUILD_DATE'), '') as build_date_str,
+    parseDateTimeBestEffortOrNull(build_date_str) as build_dt,
+    if(build_dt is null, NULL, dateDiff('day', toDate(build_dt), today())) as age_days
 select
     current_version as version,
+    build_date_str as build_date,
     age_days,
-    multiIf(age_days > 365, 'Major', age_days > 180, 'Moderate', 'OK') as severity,
-    if(age_days > 180, 'Consider upgrading - security and performance fixes available', 'Version is reasonably current') as recommendation
+    multiIf(age_days is null, 'Moderate', age_days > 365, 'Major', age_days > 180, 'Moderate', 'OK') as severity,
+    multiIf(
+        age_days is null, 'Build date not available; check packaging / release notes',
+        age_days > 180, 'Consider upgrading - security and performance fixes available',
+        'Version is reasonably current'
+    ) as recommendation
 ```
 
 ---
@@ -260,7 +268,7 @@ limit 12
 select
     code,
     name,
-    count,
+    value as count,
     last_error_time,
     substring(last_error_message, 1, 160) as last_error_message
 from system.errors
