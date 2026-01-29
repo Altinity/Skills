@@ -1,11 +1,3 @@
--- system identification
-select
-    hostName() as hostname,
-    version() as version,
-    formatReadableTimeDelta(uptime()) as uptime_human,
-    getSetting('max_memory_usage') as max_memory_usage,
-    (select value from system.asynchronous_metrics where metric = 'OSMemoryTotal') as os_memory_total
-;
 -- Object Counts Audit
 select
     'Replicated Tables' as check_name,
@@ -202,10 +194,7 @@ select
     substring(last_error_message, 1, 160) as last_error_message
 from system.errors
 where last_error_time >= now() - interval 24 hour
+  and name not in ('NO_REPLICA_HAS_PART')
 order by last_error_time desc
 limit 20
-;
-
--- Warnings from ClickHouse
-select message as warning from system.warnings
 ;

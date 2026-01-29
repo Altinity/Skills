@@ -1,8 +1,3 @@
-/* Fetch/fetch-history diagnostics (supporting)
-Usage:
-- Replace `{cluster}` with your ClickHouse cluster name (DataGrip).
-*/
-
 /* 1) Active fetches (per host)
 Interpretation:
 - Many long-running fetches or repeated fetch errors can drive lag.

@@ -68,6 +68,12 @@ scripts/run-agent.sh reporting "smoke test"
 
 ## Basic Functionality (Prompts)
 
+```
+make a full audit of clickhouse server. 
+store report into a file with a date- and host- based filename. 
+store all failed diagnostic queries with error message and skill name (in comments) into failed.sql file. place clickhouse version at the beggining of the file
+```
+
 ### 1. Health Check (Overview Agent)
 ```
 Run a health check on my ClickHouse

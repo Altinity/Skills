@@ -1,9 +1,3 @@
-/* Replication queue diagnostics (run after triage)
-Usage:
-- Replace `{cluster}` with your ClickHouse cluster name (DataGrip).
-- Run statements one-by-one.
-*/
-
 /* 1) Queue size by table (per host)
 Interpretation:
 - Large queues + old tasks + retries/backoff usually means replication is stuck.
@@ -14,6 +8,7 @@ WITH
   countIf(num_postponed > 0) AS count_postponed,
   countIf(is_currently_executing) AS count_executing
 SELECT
+  hostName() AS host,
   database,
   table,
   count_all AS queue_size,
@@ -21,10 +16,10 @@ SELECT
   count_postponed AS postponed,
   count_executing AS executing,
   multiIf(count_all > 500, 'Critical', count_all > 400, 'Major', count_all > 200, 'Moderate', 'OK') AS severity
-FROM system.replication_queue
+FROM clusterAllReplicas('{cluster}', system.replication_queue)
 GROUP BY host, database, table
 HAVING count_all > 50
-ORDER BY severity ASC, queue_size DESC
+ORDER BY severity ASC, queue_size DESC, host ASC
 LIMIT 200;
 
 /* 2) Oldest tasks in queue (per host)
@@ -34,16 +29,17 @@ Interpretation:
 WITH
   dateDiff('second', min(create_time), now()) AS oldest_task_age_sec
 SELECT
+  hostName() AS host,
   database,
   table,
   oldest_task_age_sec,
   formatReadableTimeDelta(oldest_task_age_sec) AS oldest_task_age,
   multiIf(oldest_task_age_sec > 86400, 'Critical', oldest_task_age_sec > 7200, 'Major', oldest_task_age_sec > 1800, 'Moderate', 'OK') AS severity,
   count() AS tasks_in_queue
-FROM  system.replication_queue
+FROM clusterAllReplicas('{cluster}', system.replication_queue)
 GROUP BY host, database, table
 HAVING oldest_task_age_sec > 300
-ORDER BY severity ASC, oldest_task_age_sec DESC
+ORDER BY severity ASC, oldest_task_age_sec DESC, host ASC
 LIMIT 200;
 
 /* 3) Stalled tasks detection (per host)
@@ -58,7 +54,7 @@ SELECT
   countIf(no_activity) AS stalled_tasks,
   count() AS total_tasks,
   round(100.0 * countIf(no_activity) / count(), 1) AS stalled_pct
-FROM system.replication_queue
+FROM clusterAllReplicas('{cluster}', system.replication_queue)
 GROUP BY host, database, table
 HAVING stalled_tasks > 0
 ORDER BY stalled_tasks DESC
@@ -68,6 +64,7 @@ LIMIT 200;
 Use this to identify a table/type to drill down further.
 */
 SELECT
+  hostName() AS host,
   database,
   table,
   type,
@@ -81,7 +78,7 @@ SELECT
   new_part_name,
   parts_to_merge,
   source_replica
-FROM system.replication_queue
+FROM clusterAllReplicas('{cluster}', system.replication_queue)
 WHERE last_exception != '' OR postpone_reason != ''
-ORDER BY last_exception_time DESC, num_tries DESC
+ORDER BY last_exception_time DESC, num_tries DESC, host ASC
 LIMIT 200;

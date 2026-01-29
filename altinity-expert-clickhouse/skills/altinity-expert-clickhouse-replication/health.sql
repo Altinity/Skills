@@ -1,8 +1,3 @@
-/* Replication health heuristics (optional)
-Usage:
-- Replace `{cluster}` with your ClickHouse cluster name (DataGrip).
-*/
-
 /* Quick heuristic; always validate with replication_queue / mutations. */
 WITH
   sum(is_readonly) AS readonly_replicas,

@@ -3,7 +3,7 @@ name: altinity-expert-clickhouse-overview
 description: Runs a quick overview of Clickhouse server health.
 ---
 
-Read examples of reporting SQL queries from the file checks.sql and their description as a leading comment.
+Read examples of reporting SQL queries from the file checks.sql and their description in a leading comment.
 
 Prepare a summary report based on the findings
 
@@ -12,7 +12,6 @@ Prepare a summary report based on the findings
 Based on findings, load specific modules:
 
 - Replication lag/readonly replicas/Keeper issues → `altinity-expert-clickhouse-replication`
-
 - High memory usage or OOMs → `altinity-expert-clickhouse-memory`
 - Disk usage > 80% or poor compression → `altinity-expert-clickhouse-storage`
 - Many parts, merge backlog, or TOO_MANY_PARTS → `altinity-expert-clickhouse-merges`

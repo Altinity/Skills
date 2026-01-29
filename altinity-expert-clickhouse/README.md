@@ -8,6 +8,10 @@ This package contains the modular `altinity-expert-clickhouse-*` ClickHouse diag
 - `tests/` — test suite and scenarios. Do not modify structure without updating prompts/runner.
 - `../releases/` — built zip packages for distribution.
 
+## Manual Test prompts
+- run a quick overview of clickhouse server
+
+
 ## Run Tests
 
 From `altinity-expert-clickhouse/tests`:

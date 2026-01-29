@@ -14,6 +14,7 @@ SETUP_ONLY=false
 CLEANUP_ONLY=false
 SKIP_VERIFY=false
 CLEANUP_AFTER=false
+SKIP_LLM=false
 
 usage() {
     echo "Usage: $0 [OPTIONS] SKILL"
@@ -22,6 +23,7 @@ usage() {
     echo "  --setup-only     Only create database and schema, don't run tests"
     echo "  --cleanup-only   Only drop the test database"
     echo "  --skip-verify    Skip LLM verification step"
+    echo "  --skip-llm       Skip LLM analysis entirely (SQL only)"
     echo "  --cleanup        Drop database after test completes"
     echo "  -h, --help       Show this help"
     echo ""
@@ -43,6 +45,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-verify)
             SKIP_VERIFY=true
+            shift
+            ;;
+        --skip-llm)
+            SKIP_LLM=true
             shift
             ;;
         --cleanup)
@@ -87,6 +93,7 @@ validate_env
 validate_connection
 
 # Normalize defaults for envsubst use in SQL templates
+export CLICKHOUSE_HOST="${CLICKHOUSE_HOST:-arm}"
 export CLICKHOUSE_PORT="${CLICKHOUSE_PORT:-9000}"
 export CLICKHOUSE_USER="${CLICKHOUSE_USER:-default}"
 case "${CLICKHOUSE_SECURE:-0}" in
@@ -161,6 +168,25 @@ if [[ "$SETUP_ONLY" == "true" ]]; then
     exit 0
 fi
 
+# Skip LLM mode - SQL-only tests
+if [[ "$SKIP_LLM" == "true" ]]; then
+    REPORTS_DIR="$TESTS_DIR/reports/$SKILL"
+    mkdir -p "$REPORTS_DIR"
+    REPORT="$REPORTS_DIR/report-$TIMESTAMP.md"
+    {
+        echo "# ${SKILL} (SQL-only test run)"
+        echo ""
+        echo "- ClickHouse: $(run_query "SELECT hostName(), version()")"
+        echo "- Database: \`$DB_NAME\`"
+        echo "- Timestamp: \`$TIMESTAMP\`"
+        echo ""
+        echo "LLM analysis skipped (--skip-llm)."
+    } > "$REPORT"
+    log_success "SQL-only test complete: $SKILL"
+    echo "Report: $REPORT"
+    exit 0
+fi
+
 # Step 4: Run skill analysis via LLM
 REPORTS_DIR="$TESTS_DIR/reports/$SKILL"
 mkdir -p "$REPORTS_DIR"
@@ -198,9 +224,24 @@ if [[ -f "$SKILL_DIR/prompt.md" ]]; then
                     exit 1
                 fi
             else
-                log_error "Codex analysis failed"
-                cat "$LLM_LOG"
-                exit 1
+                # Common failure modes: account/model restrictions or usage limits.
+                if rg -q "usage_limit_reached|Too Many Requests|HTTP 429|model is not supported|ChatGPT account" "$LLM_LOG" 2>/dev/null; then
+                    log_warn "Codex unavailable (usage/model limits); skipping LLM analysis for this test"
+                    {
+                        echo "# ${SKILL} (LLM skipped)"
+                        echo ""
+                        echo "- ClickHouse: $(run_query "SELECT hostName(), version()")"
+                        echo "- Database: \`$DB_NAME\`"
+                        echo "- Timestamp: \`$TIMESTAMP\`"
+                        echo ""
+                        echo "LLM analysis skipped because Codex returned an availability/usage error."
+                    } > "$REPORT"
+                    SKIP_VERIFY=true
+                else
+                    log_error "Codex analysis failed"
+                    cat "$LLM_LOG"
+                    exit 1
+                fi
             fi
             ;;
         claude)

@@ -30,7 +30,7 @@ log_error() {
 # Build clickhouse-client arguments from environment variables
 build_client_args() {
     CLIENT_ARGS=(
-        --host "${CLICKHOUSE_HOST:-localhost}"
+        --host "${CLICKHOUSE_HOST:-arm}"
         --port "${CLICKHOUSE_PORT:-9000}"
         --user "${CLICKHOUSE_USER:-default}"
     )
@@ -78,28 +78,8 @@ run_script_in_db_ignore_errors() {
 
 # Validate environment variables are set
 validate_env() {
-    local missing=0
-
-    if [[ -z "${CLICKHOUSE_HOST:-}" ]]; then
-        log_error "CLICKHOUSE_HOST is not set"
-        missing=1
-    fi
-
     if [[ -z "${CLICKHOUSE_USER:-}" ]]; then
         log_warn "CLICKHOUSE_USER is not set, using 'default'"
-    fi
-
-    if [[ $missing -eq 1 ]]; then
-        echo ""
-        echo "Required environment variables:"
-        echo "  CLICKHOUSE_HOST     - ClickHouse server hostname"
-        echo ""
-        echo "Optional environment variables:"
-        echo "  CLICKHOUSE_PORT     - Native protocol port (default: 9000)"
-        echo "  CLICKHOUSE_USER     - Database user (default: default)"
-        echo "  CLICKHOUSE_PASSWORD - User password (default: empty)"
-        echo "  CLICKHOUSE_SECURE   - Use TLS (default: false)"
-        exit 1
     fi
 }
 
@@ -108,8 +88,8 @@ validate_connection() {
     log_info "Validating ClickHouse connection..."
 
     local result
-    if result=$(run_query "SELECT version()" 2>&1); then
-        log_success "Connected to ClickHouse version: $result"
+    if result=$(run_query "SELECT hostName(), version()" 2>&1); then
+        log_success "Connected to ClickHouse: $result"
         return 0
     else
         log_error "Failed to connect to ClickHouse"

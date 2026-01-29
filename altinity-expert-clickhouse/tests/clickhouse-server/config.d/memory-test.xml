@@ -1,0 +1,15 @@
+<!--
+  Optional ClickHouse config snippet for memory skill testing.
+  Place under /etc/clickhouse-server/config.d/memory-test.xml.
+-->
+<clickhouse>
+    <!-- Make query_log flush quickly for deterministic tests -->
+    <query_log>
+        <flush_interval_milliseconds>1000</flush_interval_milliseconds>
+        <collect_interval_milliseconds>1000</collect_interval_milliseconds>
+    </query_log>
+
+    <!-- Keep caches enabled (defaults), but ensure they are non-zero -->
+    <mark_cache_size>536870912</mark_cache_size>
+    <uncompressed_cache_size>268435456</uncompressed_cache_size>
+</clickhouse>

@@ -1,8 +1,3 @@
-/* Distributed DDL diagnostics (supporting)
-Usage:
-- Replace `{cluster}` with your ClickHouse cluster name (DataGrip).
-*/
-
 /* Stuck distributed DDL can stall schema changes and trigger ALTER_METADATA backlog. */
 SELECT
   entry,

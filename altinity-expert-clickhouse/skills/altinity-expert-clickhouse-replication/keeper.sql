@@ -1,8 +1,3 @@
-/* Keeper/ZooKeeper diagnostics (supporting)
-Usage:
-- Replace `{cluster}` with your ClickHouse cluster name (DataGrip).
-*/
-
 /* 1) Keeper/ZooKeeper average latency (per host)
 Interpretation:
 - Rising avg_latency_us often correlates with replication lag/readonly.

@@ -1,9 +1,3 @@
-/* Mutation diagnostics (run when MUTATE_PART is present)
-Usage:
-- Replace `{cluster}` with your ClickHouse cluster name (DataGrip).
-- Run statements one-by-one.
-*/
-
 /* 1) Stuck/failing mutations (cluster-wide, per host) */
 SELECT
   database,

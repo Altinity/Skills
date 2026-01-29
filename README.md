@@ -25,15 +25,21 @@ variants:
 
 ### 3) Gemini CLI
 
+Install an agent skill from a git repository URL or a local path. 
+```
+gemini skills install <source> [--scope] [--path] 
+```
+ 
+or manually:
+
 ```sh
 git clone https://github.com/Altinity/Skills.git
 mkdir -p ~/.gemini/skills
 cp /absolute/path/to/Skills/altinity-expert-clickhouse/skills/altinity-expert-clickhouse-memory ~/.gemini/skills/
-
 # or
 ln -s /absolute/path/to/Skills/altinity-expert-clickhouse/skills ~/.gemini/skills/
 ```
-or just ask gemini in a chat to install skills from local directory
+
 
 ### 4) Claude.ai (web)
 Download the zip files from `releases/` and upload them in Settings (or Admin Settings for org‑wide use) to Capabilities section. 
