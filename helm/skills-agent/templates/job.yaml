@@ -46,6 +46,44 @@ spec:
               readOnly: true
             - name: workspace
               mountPath: /workspace
+            - name: clickhouse-client-config
+              mountPath: /etc/clickhouse-client/config.xml
+              subPath: clickhouse-client-config.xml
+              readOnly: true
+            - name: altinity-mcp-config
+              mountPath: /etc/altinity-mcp/config.yaml
+              subPath: altinity-mcp-config.yaml
+              readOnly: true
+            {{- if .Values.clickhouse.tls.ca }}
+            - name: clickhouse-tls-ca
+              mountPath: /etc/clickhouse-client/ca.crt
+              subPath: clickhouse-ca.crt
+              readOnly: true
+            - name: clickhouse-tls-ca
+              mountPath: /etc/altinity-mcp/ca.crt
+              subPath: clickhouse-ca.crt
+              readOnly: true
+            {{- end }}
+            {{- if .Values.clickhouse.tls.cert }}
+            - name: clickhouse-tls-cert
+              mountPath: /etc/clickhouse-client/client.crt
+              subPath: clickhouse-client.crt
+              readOnly: true
+            - name: clickhouse-tls-cert
+              mountPath: /etc/altinity-mcp/client.crt
+              subPath: clickhouse-client.crt
+              readOnly: true
+            {{- end }}
+            {{- if .Values.clickhouse.tls.key }}
+            - name: clickhouse-tls-key
+              mountPath: /etc/clickhouse-client/client.key
+              subPath: clickhouse-client.key
+              readOnly: true
+            - name: clickhouse-tls-key
+              mountPath: /etc/altinity-mcp/client.key
+              subPath: clickhouse-client.key
+              readOnly: true
+            {{- end }}
       volumes:
         - name: credentials
           secret:
@@ -53,6 +91,47 @@ spec:
             defaultMode: 0400
         - name: workspace
           emptyDir: {}
+        - name: clickhouse-client-config
+          secret:
+            secretName: {{ include "skills-agent.secretName" . }}
+            items:
+              - key: clickhouse-client-config.xml
+                path: clickhouse-client-config.xml
+            defaultMode: 0400
+        - name: altinity-mcp-config
+          secret:
+            secretName: {{ include "skills-agent.secretName" . }}
+            items:
+              - key: altinity-mcp-config.yaml
+                path: altinity-mcp-config.yaml
+            defaultMode: 0400
+        {{- if .Values.clickhouse.tls.ca }}
+        - name: clickhouse-tls-ca
+          secret:
+            secretName: {{ include "skills-agent.secretName" . }}
+            items:
+              - key: clickhouse-ca.crt
+                path: clickhouse-ca.crt
+            defaultMode: 0400
+        {{- end }}
+        {{- if .Values.clickhouse.tls.cert }}
+        - name: clickhouse-tls-cert
+          secret:
+            secretName: {{ include "skills-agent.secretName" . }}
+            items:
+              - key: clickhouse-client.crt
+                path: clickhouse-client.crt
+            defaultMode: 0400
+        {{- end }}
+        {{- if .Values.clickhouse.tls.key }}
+        - name: clickhouse-tls-key
+          secret:
+            secretName: {{ include "skills-agent.secretName" . }}
+            items:
+              - key: clickhouse-client.key
+                path: clickhouse-client.key
+            defaultMode: 0400
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

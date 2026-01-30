@@ -52,6 +52,21 @@ extraEnv: []
 # - name: CLICKHOUSE_HOST
 #   value: "localhost"
 
+# ClickHouse connection configuration
+clickhouse:
+  host: "localhost"
+  port: 9440
+  user: "default"
+  password: ""
+  tls:
+    enabled: true
+    # PEM-encoded CA certificate
+    ca: ""
+    # PEM-encoded client certificate
+    cert: ""
+    # PEM-encoded client private key
+    key: ""
+
 # Secret configuration for agent credentials
 # These will be mounted as files
 credentials:
