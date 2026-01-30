@@ -160,6 +160,124 @@ helm install my-audit ./helm/skills-agent \
 | `job.ttlSecondsAfterFinished` | Auto-cleanup after completion | `3600` |
 | `job.activeDeadlineSeconds` | Job timeout | `1800` |
 | `extraEnv` | Additional environment variables | `[]` |
+| `storeResults.enabled` | Enable S3 storage for results | `false` |
+| `storeResults.s3Bucket` | S3 bucket name | `""` |
+| `storeResults.s3Prefix` | S3 path prefix | `agent-results` |
+| `storeResults.iamRoleArn` | IAM role ARN for IRSA (EKS) | `""` |
+| `storeResults.awsAccessKeyId` | AWS access key ID (if not using IRSA) | `""` |
+| `storeResults.awsSecretAccessKey` | AWS secret access key (if not using IRSA) | `""` |
+| `storeResults.awsRegion` | AWS region | `us-east-1` |
+
+### Storing Results in S3
+
+The Helm chart supports automatically uploading agent execution logs to Amazon S3 when the job completes successfully (exit code 0). There are two authentication methods available:
+
+#### Option 1: Using IAM Role for Service Account (IRSA) - Recommended for EKS
+
+IRSA is the recommended approach for AWS EKS clusters as it eliminates the need to manage AWS credentials.
+
+**Prerequisites:**
+1. Create an IAM role with S3 write permissions
+2. Configure the role's trust policy to allow your EKS service account
+3. Attach a policy like:
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:PutObjectAcl"
+      ],
+      "Resource": "arn:aws:s3:::your-bucket/agent-results/*"
+    }
+  ]
+}
+```
+
+**Install with IRSA:**
+```bash
+helm install my-audit oci://ghcr.io/altinity/skills-helm-chart/skills-agent \
+  --set skillName=altinity-clickhouse-expert \
+  --set prompt="Analyze ClickHouse cluster health" \
+  --set-file credentials.claudeCredentials=~/.claude/.credentials.json \
+  --set storeResults.enabled=true \
+  --set storeResults.s3Bucket=my-results-bucket \
+  --set storeResults.s3Prefix=agent-results \
+  --set storeResults.iamRoleArn=arn:aws:iam::123456789012:role/my-eks-s3-role
+```
+
+The chart will automatically:
+- Create a ServiceAccount with the `eks.amazonaws.com/role-arn` annotation
+- Associate the pod with the ServiceAccount
+- Allow the pod to assume the IAM role via IRSA
+
+#### Option 2: Using AWS Credentials Directly
+
+For non-EKS environments or testing, you can provide AWS credentials directly.
+
+**⚠️ Warning:** This method stores credentials in a Kubernetes Secret. Use IRSA when possible.
+
+```bash
+helm install my-audit oci://ghcr.io/altinity/skills-helm-chart/skills-agent \
+  --set skillName=altinity-clickhouse-expert \
+  --set prompt="Analyze ClickHouse cluster health" \
+  --set-file credentials.claudeCredentials=~/.claude/.credentials.json \
+  --set storeResults.enabled=true \
+  --set storeResults.s3Bucket=my-results-bucket \
+  --set storeResults.s3Prefix=agent-results \
+  --set storeResults.awsAccessKeyId=AKIAIOSFODNN7EXAMPLE \
+  --set storeResults.awsSecretAccessKey=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY \
+  --set storeResults.awsRegion=us-east-1
+```
+
+**Using a values file:**
+```yaml
+# values-with-s3.yaml
+storeResults:
+  enabled: true
+  s3Bucket: my-results-bucket
+  s3Prefix: agent-results
+  awsAccessKeyId: AKIAIOSFODNN7EXAMPLE
+  awsSecretAccessKey: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+  awsRegion: us-east-1
+```
+
+```bash
+helm install my-audit oci://ghcr.io/altinity/skills-helm-chart/skills-agent \
+  --set-file credentials.claudeCredentials=~/.claude/.credentials.json \
+  -f values-with-s3.yaml
+```
+
+#### How S3 Storage Works
+
+When `storeResults.enabled=true`:
+1. Agent execution logs are written to `/tmp/agent-logs/${TIMESTAMP}/agent-execution.log`
+2. If the agent completes successfully (exit code 0), logs are uploaded to:
+   ```
+   s3://${S3_BUCKET}/${S3_PREFIX}/${TIMESTAMP}/agent-execution.log
+   ```
+3. If the agent fails (non-zero exit code), logs remain in the temporary directory and are NOT uploaded
+4. The timestamp format is `YYYYMMDD-HHMMSS` (e.g., `20240115-143022`)
+
+**Example S3 path:**
+```
+s3://my-results-bucket/agent-results/20240115-143022/agent-execution.log
+```
+
+#### Viewing Results
+
+```bash
+# List all agent execution results
+aws s3 ls s3://my-results-bucket/agent-results/
+
+# Download a specific execution log
+aws s3 cp s3://my-results-bucket/agent-results/20240115-143022/agent-execution.log ./
+
+# View logs directly
+aws s3 cp s3://my-results-bucket/agent-results/20240115-143022/agent-execution.log - | less
+```
 
 ### Using existing secrets
 
