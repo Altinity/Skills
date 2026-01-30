@@ -1,0 +1,6 @@
+apiVersion: v2
+name: skills-agent
+description: A Helm chart to run Codex or Claude agents with skills in non-interactive mode
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
