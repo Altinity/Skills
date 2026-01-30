@@ -1,4 +1,5 @@
 -- Object Counts Audit
+select * from (
 select
     'Replicated Tables' as check_name,
     (select count() from system.tables where engine like 'Replicated%') as value,
@@ -37,45 +38,69 @@ select
     multiIf(value > 100, 'Major', value > 50, 'Moderate', 'OK') as severity,
     'Check max_concurrent_queries setting' as note
 
-order by
-    multiIf(severity = 'Critical', 1, severity = 'Major', 2, severity = 'Moderate', 3, 4),
-    check_name
-;
+union all
 
+SELECT
+    'Kafka Consumers' AS check_name,
+    toUInt64(consumers) AS value,
+    multiIf(consumers > pool_size, 'Major',
+            consumers > 20,        'Moderate',
+            'OK')                  AS severity,
+    concat('consumers=', toString(consumers), ' pool_size=', toString(pool_size)) AS note
+FROM
+(
+    SELECT
+        sumIf(value, metric = 'KafkaConsumers') AS consumers,
+        sumIf(value, metric = 'BackgroundMessageBrokerSchedulePoolSize') AS pool_size
+    FROM system.metrics
+)
+)
+where value != 0
+;
 -- Resource Utilization
-with
-    (select value from system.asynchronous_metrics where metric = 'OSMemoryTotal') as total_ram,
-    (select value from system.asynchronous_metrics where metric = 'MemoryResident') as used_ram,
-    (select sum(primary_key_bytes_in_memory) from system.parts) as pk_memory,
-    (select sum(bytes_allocated) from system.dictionaries) as dict_memory,
-    (select assumeNotNull(sum(total_bytes)) from system.tables where engine in ('Memory','Set','Join')) as mem_tables
-select
-    'Memory Usage' as resource,
-    formatReadableSize(used_ram) as used,
-    formatReadableSize(total_ram) as total,
-    round(100.0 * used_ram / total_ram, 1) as pct,
-    multiIf(pct > 90, 'Critical', pct > 80, 'Major', pct > 70, 'Moderate', 'OK') as severity
-
-union all
-
-select
-    'Primary Keys in RAM' as resource,
-    formatReadableSize(pk_memory) as used,
-    formatReadableSize(total_ram) as total,
-    round(100.0 * pk_memory / total_ram, 1) as pct,
-    multiIf(pct > 30, 'Critical', pct > 25, 'Major', pct > 20, 'Moderate', 'OK') as severity
-
-union all
-
-select
-    'Dictionaries + MemTables' as resource,
-    formatReadableSize(dict_memory + mem_tables) as used,
-    formatReadableSize(total_ram) as total,
-    round(100.0 * (dict_memory + mem_tables) / total_ram, 1) as pct,
-    multiIf(pct > 30, 'Critical', pct > 25, 'Major', pct > 20, 'Moderate', 'OK') as severity
-
+SELECT
+    'Memory Usage' AS resource,
+    formatReadableSize(used_ram) AS used,
+    formatReadableSize(total_ram) AS total,
+    round(100.0 * used_ram / total_ram, 1) AS pct,
+    multiIf(pct > 90, 'Critical', pct > 80, 'Major', pct > 70, 'Moderate', 'OK') AS severity
+FROM
+(
+    SELECT
+        toFloat64((SELECT value FROM system.asynchronous_metrics WHERE metric = 'MemoryResident')) AS used_ram,
+        toFloat64((SELECT value FROM system.asynchronous_metrics WHERE metric = 'OSMemoryTotal')) AS total_ram
+)
+HAVING severity != 'OK'
 ;
-
+SELECT
+    'Primary Keys in RAM' AS resource,
+    formatReadableSize(pk_memory) AS used,
+    formatReadableSize(total_ram) AS total,
+    round(100.0 * pk_memory / total_ram, 1) AS pct,
+    multiIf(pct > 30, 'Critical', pct > 25, 'Major', pct > 20, 'Moderate', 'OK') AS severity
+FROM
+(
+    SELECT
+        toFloat64((SELECT sum(primary_key_bytes_in_memory) FROM system.parts)) AS pk_memory,
+        toFloat64((SELECT value FROM system.asynchronous_metrics WHERE metric = 'OSMemoryTotal')) AS total_ram
+)
+HAVING severity != 'OK'
+;
+SELECT
+    'Dictionaries + MemTables' AS resource,
+    formatReadableSize(used_bytes) AS used,
+    formatReadableSize(total_ram) AS total,
+    round(100.0 * used_bytes / total_ram, 1) AS pct,
+    multiIf(pct > 30, 'Critical', pct > 25, 'Major', pct > 20, 'Moderate', 'OK') AS severity
+FROM
+(
+    SELECT
+        toFloat64((SELECT sum(bytes_allocated) FROM system.dictionaries))
+            + toFloat64((SELECT assumeNotNull(sum(total_bytes)) FROM system.tables WHERE engine IN ('Memory', 'Set', 'Join'))) AS used_bytes,
+        toFloat64((SELECT value FROM system.asynchronous_metrics WHERE metric = 'OSMemoryTotal')) AS total_ram
+)
+HAVING severity != 'OK'
+;
 -- Disk Health
 select
     name as disk,
@@ -88,8 +113,8 @@ from system.disks
 where lower(type) = 'local'
 order by used_pct desc
 ;
-
 -- Replication Health
+select * from (
 select
     'Readonly Replicas' as check_name,
     toFloat64((select value from system.metrics where metric = 'ReadonlyReplica')) as value,
@@ -108,84 +133,7 @@ select
     'Replication Queue Size' as check_name,
     toFloat64((select value from system.asynchronous_metrics where metric = 'ReplicasSumQueueSize')) as value,
     multiIf(value > 500, 'Major', value > 200, 'Moderate', 'OK') as severity
-
-;
-
--- Background Pool Status
-with
-    transform(extract(metric, '^Background(.*)PoolTask'),
-        ['MergesAndMutations', 'Fetches', 'Move', 'Common', 'Schedule', 'BufferFlushSchedule', 'MessageBrokerSchedule', 'DistributedSchedule'],
-        ['pool', 'fetches_pool', 'move_pool', 'common_pool', 'schedule_pool', 'buffer_flush_schedule_pool', 'message_broker_schedule_pool', 'distributed_schedule_pool'],
-        ''
-    ) as pool_key,
-    concat('background_', lower(pool_key), '_size') as setting_name
-select
-    extract(m.metric, '^Background(.*)Task') as pool_name,
-    m.value as active_tasks,
-    toFloat64OrZero(s.value) as pool_size,
-    round(100.0 * m.value / pool_size, 1) as utilization_pct,
-    multiIf(utilization_pct > 99, 'Major', utilization_pct > 90, 'Moderate', 'OK') as severity
-from system.metrics m
-left join system.settings s on s.name = setting_name
-where m.metric like 'Background%PoolTask'
-  and pool_size > 0
-order by utilization_pct desc
-;
-
--- Version Check
-with
-    (select value from system.build_options where name = 'VERSION_DESCRIBE') as current_version,
-    nullIf((select value from system.build_options where name = 'BUILD_DATE'), '') as build_date_str,
-    parseDateTimeBestEffortOrNull(build_date_str) as build_dt,
-    if(build_dt is null, NULL, dateDiff('day', toDate(build_dt), today())) as age_days
-select
-    current_version as version,
-    build_date_str as build_date,
-    age_days,
-    multiIf(age_days is null, 'Moderate', age_days > 365, 'Major', age_days > 180, 'Moderate', 'OK') as severity,
-    multiIf(
-        age_days is null, 'Build date not available; check packaging / release notes',
-        age_days > 180, 'Consider upgrading - security and performance fixes available',
-        'Version is reasonably current'
-    ) as recommendation
-;
-
--- DDL Queue Health
- WITH
-    600  AS active_stuck_s,   -- “Active” older than this => jam
-    100  AS backlog_warn,
-    1000 AS backlog_major
-  SELECT
-    cluster,
-    countIf(status != 'Finished') AS not_finished,
-    countIf(status = 'Active')    AS active,
-
-    nullIf(minIf(query_create_time, status != 'Finished'), toDateTime(0)) AS oldest_not_finished,
-    dateDiff('second', oldest_not_finished, now())                        AS oldest_not_finished_age_s,
-
-    nullIf(minIf(query_create_time, status = 'Active'), toDateTime(0))    AS oldest_active,
-    dateDiff('second', oldest_active, now())                              AS oldest_active_age_s,
-
-    argMinIf(entry, query_create_time, status = 'Active')                 AS active_entry,
-    argMinIf(host,  query_create_time, status = 'Active')                 AS active_host,
-    argMinIf(substring(query, 1, 200), query_create_time, status = 'Active') AS active_query_200,
-
-    multiIf(
-      active > 0 AND oldest_active_age_s >= active_stuck_s, 'Major',
-      not_finished >= backlog_major,                         'Major',
-      not_finished >= backlog_warn,                          'Moderate',
-      active > 0 AND oldest_active_age_s >= 120,             'Moderate',
-      'OK'
-    ) AS ddl_queue_health,
-
-    if(ddl_queue_health != 'OK',
-       'New ON CLUSTER may time out: queue is serialized by the oldest Active entry',
-       'DDL queue looks healthy'
-    ) AS note
-  FROM system.distributed_ddl_queue
-  GROUP BY cluster
-  ORDER BY (ddl_queue_health != 'OK') DESC, ifNull(oldest_active_age_s, 0) DESC, not_finished DESC
-;
+) where value !=0;
 
 -- System Log Health
 select
@@ -197,7 +145,6 @@ from system.tables
 where database = 'system' and name like '%_log' and engine like '%MergeTree%'
 order by has_ttl, name
 ;
-
 -- Log disk usage
 select
     table,
@@ -208,8 +155,7 @@ where database = 'system' and table like '%_log' and active
 group by table
 order by sum(bytes_on_disk) desc
 ;
-
--- Recent Errors Summary (Timeframe-Based)
+-- Recent Errors Summary
 select
     toStartOfHour(event_time) as hour,
     countIf(type IN ('ExceptionBeforeStart', 'ExceptionWhileProcessing')) as failed_queries,
@@ -219,10 +165,18 @@ from system.query_log
 where event_time >= now() - interval 24 hour
 group by hour
 order by hour desc
-limit 12
+limit 24
 ;
-
--- system.errors Summary (Timeframe-Based)
+SELECT
+    event_type,
+    countIf(error != 0) AS errors,
+    count() AS total,
+    substr(groupUniqArray(2)(exception)[2],1,100) exception
+FROM system.part_log
+WHERE event_time >= now() - INTERVAL 24 HOUR
+GROUP BY event_type
+;
+-- system.errors
 select
     code,
     name,
