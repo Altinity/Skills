@@ -7,23 +7,48 @@ This repository contains skills used for ClickHouse DB performance and schema an
 - `automations/`: Batch and focus audit scripts that run full ClickHouse analysis and emit a single report.
 - `releases/`: Built zip packages for distribution (one per skill).
 
-## Install / Use Skills
+## Use installed skills
 
-### 1) Codex CLI
+### Claude Code / Claude Desktop / opencode
+```
+/skill-name prompt message
+```
+
+### Codex
+```
+$skill-name message
+```
+
+### Gemini Cli
+gemini doesn't have dedicated syntax for skill usage, so you need use prompt like that
+
+```
+use skill skill-name message
+```
+
+## Install Skills
+
+### Universal via npx (bunx if you use bun)
+```
+npx skills add --list Altinity/skills
+npx skills add Altinity/skills
+```
+
+### Codex CLI
 
 variants:
 - use $skill-installer skill inside codex
 - clone repo and copy needed skills into ~/.codex/skill directory.
 - clone repo and ln (symlink) repo's skill directory into ~/.codex
 
-### 2) Claude CLI (Claude Code)
+### Claude CLI (Claude Code)
 
 variants:
 - claude skills add URL
 - clone repo and copy needed skills into ~/.claude/skill directory.
 - clone repo and ln (symlink) repo's skill directory into ~/.claude
 
-### 3) Gemini CLI
+### Gemini CLI
 
 Install an agent skill from a git repository URL or a local path. 
 ```
@@ -41,8 +66,9 @@ ln -s /absolute/path/to/Skills/altinity-expert-clickhouse/skills ~/.gemini/skill
 ```
 
 
-### 4) Claude.ai (web)
-Download the zip files from `releases/` and upload them in Settings (or Admin Settings for org‑wide use) to Capabilities section. 
+### Claude.ai (web)
+Download the zip files from https://github.com/Altinity/skills/releases/ and upload them in Settings (or Admin Settings for org‑wide use) to Capabilities section. 
+
 
 ## Experimental Skills 
 - `experimental/codex-summarize-pipeline/`: Chunk→reduce pipeline for summarizing large articles/files into `summaries/*.md`.
