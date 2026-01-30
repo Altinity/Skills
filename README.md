@@ -106,6 +106,25 @@ A Helm chart is provided to run skills as Kubernetes Jobs in non-interactive (YO
 
 ### Install the chart
 
+#### From OCI Registry (Recommended)
+
+```bash
+# Install with Claude agent (default)
+helm install my-audit oci://ghcr.io/altinity/skills-helm-chart/skills-agent \
+  --set skillName=altinity-clickhouse-expert \
+  --set prompt="Analyze ClickHouse cluster health" \
+  --set-file credentials.claudeCredentials=~/.claude/.credentials.json
+
+# Install with Codex agent
+helm install my-audit oci://ghcr.io/altinity/skills-helm-chart/skills-agent \
+  --set agent=codex \
+  --set skillName=altinity-expert-clickhouse-audit \
+  --set prompt="Run full audit" \
+  --set-file credentials.codexAuth=~/.codex/auth.json
+```
+
+#### From Local Repository
+
 ```bash
 # Clone the repository
 git clone https://github.com/Altinity/skills.git
