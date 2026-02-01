@@ -1,3 +1,7 @@
+# Debug mode: if true, creates a Pod with sleep infinity instead of a Job
+# This allows you to kubectl exec into the pod for debugging
+debugMode: false
+
 # Available agents: codex, claude
 agent: claude
 

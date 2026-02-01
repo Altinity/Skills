@@ -1,3 +1,4 @@
+{{- if not .Values.debugMode }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -163,3 +164,4 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+{{- end }}
