@@ -148,6 +148,7 @@ helm install my-audit ./helm/skills-agent \
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
+| `debugMode` | Enable debug mode (creates Pod instead of Job) | `false` |
 | `agent` | Agent to use: `claude` or `codex` | `claude` |
 | `skillName` | Skill name (without `/` or `$` prefix) | `altinity-clickhouse-expert` |
 | `prompt` | Prompt to pass to the skill | `Analyze ClickHouse cluster health` |
@@ -167,6 +168,87 @@ helm install my-audit ./helm/skills-agent \
 | `storeResults.awsAccessKeyId` | AWS access key ID (if not using IRSA) | `""` |
 | `storeResults.awsSecretAccessKey` | AWS secret access key (if not using IRSA) | `""` |
 | `storeResults.awsRegion` | AWS region | `us-east-1` |
+
+### Debug Mode
+
+Debug mode allows you to troubleshoot agent execution issues by creating a Pod that sleeps indefinitely instead of running a Job. This gives you an interactive shell to explore the environment, test commands, and run the agent manually.
+
+#### Enable Debug Mode
+
+```bash
+# Install with debug mode enabled
+helm install my-debug oci://ghcr.io/altinity/skills-helm-chart/skills-agent \
+  --set debugMode=true \
+  --set skillName=altinity-clickhouse-expert \
+  --set prompt="Analyze ClickHouse cluster health" \
+  --set-file credentials.claudeCredentials=~/.claude/.credentials.json
+```
+
+#### Connect to Debug Pod
+
+```bash
+# Connect to the debug pod
+kubectl exec -it <pod-name>-debug -- /bin/sh
+
+# The pod logs show instructions on how to run the agent manually
+kubectl logs <pod-name>-debug
+```
+
+#### Inside the Debug Pod
+
+Once connected, you can:
+
+```bash
+# For Claude agent
+cd /workspace
+mkdir -p /home/bun/.claude
+cp /secrets/claude-credentials.json /home/bun/.claude/.credentials.json
+chmod 600 /home/bun/.claude/.credentials.json
+claude --dangerously-skip-permissions -p "/altinity-clickhouse-expert Analyze ClickHouse cluster health"
+
+# For Codex agent
+cd /workspace
+mkdir -p /home/bun/.codex
+cp /secrets/codex-auth.json /home/bun/.codex/auth.json
+chmod 600 /home/bun/.codex/auth.json
+codex --dangerously-skip-permissions "$altinity-clickhouse-expert Analyze ClickHouse cluster health"
+
+# Test ClickHouse connectivity
+clickhouse-client --query "SELECT version()"
+
+# Explore the environment
+ls -la /workspace
+env | grep -i clickhouse
+cat /etc/clickhouse-client/config.xml
+```
+
+#### Debug Common Issues
+
+```bash
+# Check if credentials are mounted correctly
+ls -la /secrets/
+
+# Verify ClickHouse connection configuration
+cat /etc/clickhouse-client/config.xml
+cat /etc/altinity-mcp/config.yaml
+
+# Test TLS certificates (if using TLS)
+ls -la /etc/clickhouse-client/
+openssl x509 -in /etc/clickhouse-client/ca.crt -text -noout
+
+# Check environment variables
+env | sort
+```
+
+#### Cleanup Debug Pod
+
+```bash
+# Delete the debug pod when done
+kubectl delete pod <pod-name>-debug
+
+# Or uninstall the entire release
+helm uninstall my-debug
+```
 
 ### Storing Results in S3
 
