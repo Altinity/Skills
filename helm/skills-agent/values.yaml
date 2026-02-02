@@ -14,7 +14,7 @@ prompt: "Analyze ClickHouse cluster health"
 
 # Image configuration
 image:
-  repository: ghcr.io/altinity/skills
+  repository: ghcr.io/altinity/expert
   tag: latest
   pullPolicy: IfNotPresent
 
