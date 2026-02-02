@@ -13,15 +13,19 @@ RUN bash -xec "apt-get update && apt-get install --no-install-recommends -y wget
     rm -rf /tmp/aws /tmp/awscliv2.zip && \
     rm -rf /var/lib/apt/lists/* && rm -rf /var/cache/apt/*"
 
-USER bun
-ENV HOME=/home/bun
-ENV BUN_INSTALL=/home/bun/.bun
-ENV PATH="/home/bun/.bun/bin:${PATH}"
+ENV BUN_INSTALL=/opt/bun
+ENV PATH="/opt/bun/bin:${PATH}"
 
 RUN bun install -g @openai/codex@latest \
   && bun install -g @anthropic-ai/claude-code@latest \
   && bunx skills add --global --agent claude-code --yes Altinity/Skills \
-  && bunx skills add --global --agent codex --yes Altinity/Skills
+  && bunx skills add --global --agent codex --yes Altinity/Skills \
+  && codex --version \
+  && claude --version \
+  && chown -R bun:bun /opt/bun /home/bun
+
+ENV HOME=/home/bun
+USER bun
 
 COPY --from=mcp --chown=bun:bun /bin/altinity-mcp /bin/altinity-mcp
 
