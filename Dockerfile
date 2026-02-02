@@ -13,10 +13,10 @@ RUN bash -xec "apt-get update && apt-get install --no-install-recommends -y wget
     rm -rf /tmp/aws /tmp/awscliv2.zip && \
     rm -rf /var/lib/apt/lists/* && rm -rf /var/cache/apt/*"
 
-RUN bun install -g @openai/codex@latest
-RUN bun install -g @anthropic-ai/claude-code@latest
 USER bun
 ENV HOME=/home/bun
+RUN bun install -g @openai/codex@latest
+RUN bun install -g @anthropic-ai/claude-code@latest
 RUN bunx skills add --global --agent claude-code --yes  Altinity/Skills
 RUN bunx skills add --global --agent codex --yes Altinity/Skills
 
