@@ -13,6 +13,9 @@ RUN bash -xec "apt-get update && apt-get install --no-install-recommends -y wget
     rm -rf /tmp/aws /tmp/awscliv2.zip && \
     rm -rf /var/lib/apt/lists/* && rm -rf /var/cache/apt/*"
 
+RUN mkdir -p /home/bun /opt/bun
+
+ENV HOME=/home/bun
 ENV BUN_INSTALL=/opt/bun
 ENV PATH="/opt/bun/bin:${PATH}"
 
@@ -22,12 +25,11 @@ RUN bun install -g @openai/codex@latest \
   && bunx skills add --global --agent codex --yes Altinity/Skills \
   && codex --version \
   && claude --version \
-  && chown -R bun:bun /opt/bun /home/bun
+  && chown -R bun:bun /home/bun /opt/bun
 
-ENV HOME=/home/bun
+COPY --from=mcp /bin/altinity-mcp /bin/altinity-mcp
+
 USER bun
-
-COPY --from=mcp --chown=bun:bun /bin/altinity-mcp /bin/altinity-mcp
 
 RUN mkdir -p /home/bun/.codex \
   && cat <<'EOF' > /home/bun/.codex/config.toml
@@ -37,5 +39,5 @@ web_search = "live"
 
 [mcp_servers.clickhouse]
 command = "/bin/altinity-mcp"
-args = ["--config","/etc/altinity-mcp.yaml"]
+args = ["--config","/etc/altinity-mcp/config.yaml"]
 EOF
