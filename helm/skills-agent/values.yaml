@@ -1,0 +1,131 @@
+# Debug mode: if true, creates a Pod with sleep infinity instead of a Job
+# This allows you to kubectl exec into the pod for debugging
+debugMode: false
+
+# Available agents: codex, claude
+agent: claude
+
+# Skill name to run (without leading / or $)
+# Examples: altinity-clickhouse-expert, altinity-expert-clickhouse-audit
+skillName: altinity-clickhouse-expert
+
+# Prompt to pass to the skill
+prompt: "Analyze ClickHouse cluster health"
+
+# Image configuration
+image:
+  repository: ghcr.io/altinity/skills
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# Image pull secrets for private registries
+imagePullSecrets: []
+# - name: ghcr-secret
+
+# Job configuration
+job:
+  # Restart policy: Never or OnFailure
+  restartPolicy: Never
+  # Number of retries before marking job as failed
+  backoffLimit: 0
+  # TTL seconds after finished (cleanup)
+  ttlSecondsAfterFinished: 3600
+  # Active deadline seconds (timeout)
+  activeDeadlineSeconds: 1800
+
+# Resource limits
+resources:
+  limits:
+    cpu: "2"
+    memory: 4Gi
+  requests:
+    cpu: "500m"
+    memory: 1Gi
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity
+affinity: {}
+
+# Additional environment variables
+extraEnv: []
+# - name: CLICKHOUSE_HOST
+#   value: "localhost"
+
+# ClickHouse connection configuration
+clickhouse:
+  host: "localhost"
+  port: 9440
+  user: "default"
+  password: ""
+  tls:
+    enabled: true
+    # PEM-encoded CA certificate
+    ca: ""
+    # PEM-encoded client certificate
+    cert: ""
+    # PEM-encoded client private key
+    key: ""
+
+# Secret configuration for agent credentials
+# These will be mounted as files
+credentials:
+  # Create secret from values (set to false if using existing secret)
+  create: true
+  # Name of existing secret (if create is false)
+  existingSecretName: ""
+
+  # Codex auth.json content (for OpenAI Codex)
+  # See: https://github.com/openai/codex
+  codexAuth: |
+    {
+      "token": "YOUR_OPENAI_API_KEY"
+    }
+
+  # Claude credentials.json content (for Anthropic Claude)
+  # See: https://docs.anthropic.com/claude-code
+  claudeCredentials: |
+    {
+      "claudeAiOauth": {
+        "accessToken": "YOUR_CLAUDE_ACCESS_TOKEN",
+        "refreshToken": "YOUR_CLAUDE_REFRESH_TOKEN",
+        "expiresAt": "2099-12-31T23:59:59.999Z"
+      }
+    }
+
+# Service account
+serviceAccount:
+  create: false
+  name: ""
+  # Namespace where the service account should be created (only used when create: true)
+  # If not set, uses the release namespace
+  # Note: Pods can only use service accounts from their own namespace
+  # To use a service account from another namespace, you need to:
+  # 1. Create the service account in that namespace (set create: true, namespace: "other-ns")
+  # 2. Create appropriate RoleBinding/ClusterRoleBinding
+  # 3. Deploy the chart in the same namespace as the service account
+  namespace: ""
+  annotations: {}
+
+# S3 storage configuration for agent execution results
+storeResults:
+  enabled: false
+  # S3 bucket name where results will be stored
+  s3Bucket: ""
+  # S3 path prefix (optional)
+  s3Prefix: "agent-results"
+  
+  # AWS credentials configuration
+  # Option 1: Use IAM Role for Service Account (IRSA) - recommended for EKS
+  # Provide the ARN of the IAM role
+  iamRoleArn: ""
+  
+  # Option 2: Use AWS credentials directly (not recommended for production)
+  # If iamRoleArn is not set, these credentials will be used
+  awsAccessKeyId: ""
+  awsSecretAccessKey: ""
+  awsRegion: "us-east-1"

@@ -1,0 +1,59 @@
+{{- if .Values.debugMode }}
+Skills Agent Debug Pod deployed!
+
+Agent: {{ .Values.agent }}
+Skill: {{ .Values.skillName }}
+Prompt: {{ .Values.prompt }}
+
+DEBUG MODE is enabled - the pod will sleep indefinitely for debugging.
+
+To connect to the debug pod:
+  kubectl exec -it {{ include "skills-agent.fullname" . }}-debug -- /bin/sh
+
+To check pod status:
+  kubectl get pod {{ include "skills-agent.fullname" . }}-debug
+
+To view pod logs (startup instructions):
+  kubectl logs {{ include "skills-agent.fullname" . }}-debug
+
+Inside the pod, you can:
+  - Explore the environment
+  - Run the agent manually (see logs for commands)
+  - Debug issues interactively
+
+To delete the debug pod when done:
+  kubectl delete pod {{ include "skills-agent.fullname" . }}-debug
+
+{{- else }}
+Skills Agent Job deployed!
+
+Agent: {{ .Values.agent }}
+Skill: {{ .Values.skillName }}
+Prompt: {{ .Values.prompt }}
+
+To check job status:
+  kubectl get jobs -l app.kubernetes.io/instance={{ .Release.Name }}
+
+To view logs:
+  kubectl logs -l app.kubernetes.io/instance={{ .Release.Name }} -f
+
+To list all pods:
+  kubectl get pods -l app.kubernetes.io/instance={{ .Release.Name }}
+{{- end }}
+
+{{- if .Values.credentials.create }}
+
+WARNING: Credentials secret was created with placeholder values.
+Make sure to update the secret with real credentials:
+
+For Claude:
+  kubectl create secret generic {{ include "skills-agent.secretName" . }} \
+    --from-file=claude-credentials.json=/path/to/your/.credentials.json \
+    --from-file=codex-auth.json=/path/to/your/auth.json \
+    --dry-run=client -o yaml | kubectl apply -f -
+
+Or use --set-file during helm install:
+  helm install {{ .Release.Name }} ./skills-agent \
+    --set-file credentials.claudeCredentials=/path/to/.credentials.json \
+    --set-file credentials.codexAuth=/path/to/auth.json
+{{- end }}
