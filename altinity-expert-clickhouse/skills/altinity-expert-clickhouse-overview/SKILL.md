@@ -7,7 +7,7 @@ description: Runs a quick overview of Clickhouse server health.
 
 ## Predefined SQL
 
-Run reporting SQL queries from files:
+Run reporting SQL queries from files in Skill directory:
 - checks.sql 
 - metrics.sql
 - ddl_queue.sql

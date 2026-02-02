@@ -1,0 +1,40 @@
+<!--
+  Test-suite ClickHouse config snippet.
+  Mounted into the Docker container under:
+    /etc/clickhouse-server/config.d/test-suite-logs.xml
+
+  Goal: make system log tables present and flushed quickly so skills can reliably
+  summarize last-24h activity in tests.
+-->
+<clickhouse>
+    <query_log>
+        <flush_interval_milliseconds>1000</flush_interval_milliseconds>
+        <collect_interval_milliseconds>1000</collect_interval_milliseconds>
+    </query_log>
+
+    <query_thread_log>
+        <flush_interval_milliseconds>1000</flush_interval_milliseconds>
+    </query_thread_log>
+
+    <query_views_log>
+        <flush_interval_milliseconds>1000</flush_interval_milliseconds>
+    </query_views_log>
+
+    <text_log>
+        <flush_interval_milliseconds>1000</flush_interval_milliseconds>
+        <level>notice</level>
+    </text_log>
+
+    <trace_log>
+        <flush_interval_milliseconds>1000</flush_interval_milliseconds>
+    </trace_log>
+
+    <metric_log>
+        <flush_interval_milliseconds>1000</flush_interval_milliseconds>
+    </metric_log>
+
+    <asynchronous_metric_log>
+        <flush_interval_milliseconds>1000</flush_interval_milliseconds>
+    </asynchronous_metric_log>
+</clickhouse>
+

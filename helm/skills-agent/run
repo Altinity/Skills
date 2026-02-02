@@ -1,0 +1,21 @@
+#!/bin/bash
+
+if [ "${1:-}" = "stop" ]; then
+  helm uninstall expert
+  exit $?
+fi
+
+if [ "${1:-}" = "debug" ]; then
+  debug_flag="--set debugMode=true"
+else
+  debug_flag=""
+fi
+
+if ! helm template expert ./ -f gh-demo.yaml ${debug_flag} \
+  | rg -q "kind: (Pod|Job)"; then
+  echo "ERROR: Helm rendered no Pod/Job. Check debugMode/values." >&2
+  exit 1
+fi
+
+helm install expert ./ -f gh-demo.yaml ${debug_flag} \
+   --set-file credentials.codexAuth=$HOME/.codex/auth.json

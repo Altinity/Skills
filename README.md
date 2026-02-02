@@ -75,7 +75,7 @@ Download the zip files from https://github.com/Altinity/skills/releases/ and upl
 A pre-built Docker image with Claude Code, Codex CLI, and all skills is available:
 
 ```bash
-docker pull ghcr.io/altinity/skills:latest
+docker pull ghcr.io/altinity/expert:latest
 ```
 
 The image includes:
@@ -90,13 +90,13 @@ The image includes:
 # Claude agent
 docker run -it --rm \
   -v ~/.claude:/home/bun/.claude \
-  ghcr.io/altinity/skills:latest \
+  ghcr.io/altinity/expert:latest \
   claude --dangerously-skip-permissions -p "/altinity-clickhouse-expert Analyze cluster health"
 
 # Codex agent
 docker run -it --rm \
   -v ~/.codex:/home/bun/.codex \
-  ghcr.io/altinity/skills:latest \
+  ghcr.io/altinity/expert:latest \
   codex --dangerously-skip-permissions "\$altinity-clickhouse-expert Analyze cluster health"
 ```
 
@@ -152,7 +152,7 @@ helm install my-audit ./helm/skills-agent \
 | `agent` | Agent to use: `claude` or `codex` | `claude` |
 | `skillName` | Skill name (without `/` or `$` prefix) | `altinity-clickhouse-expert` |
 | `prompt` | Prompt to pass to the skill | `Analyze ClickHouse cluster health` |
-| `image.repository` | Docker image repository | `ghcr.io/altinity/skills` |
+| `image.repository` | Docker image repository | `ghcr.io/altinity/expert` |
 | `image.tag` | Docker image tag | `latest` |
 | `credentials.create` | Create credentials secret | `true` |
 | `credentials.existingSecretName` | Use existing secret name | `""` |

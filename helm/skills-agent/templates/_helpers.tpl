@@ -120,7 +120,7 @@ Build the command based on agent type
   
   echo "Starting agent execution..."
   set +e
-  codex --dangerously-bypass-approvals-and-sandbox '${{ .Values.skillName }} {{ .Values.prompt }}' 2>&1 | tee "${LOG_DIR}/agent-execution.log"
+  codex exec --dangerously-bypass-approvals-and-sandbox{{- if .Values.model }} --model "{{ .Values.model }}"{{- end }} '${{ .Values.skillName }} {{ .Values.prompt }}' 2>&1 | tee "${LOG_DIR}/agent-execution.log"
   EXIT_CODE=$?
   set -e
   
@@ -167,6 +167,10 @@ imagePullSecrets:
   {{- toYaml . | nindent 2 }}
 {{- end }}
 serviceAccountName: {{ include "skills-agent.serviceAccountName" . }}
+{{- with .Values.podSecurityContext }}
+securityContext:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
 containers:
   - name: agent
     image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -245,7 +249,7 @@ volumes:
   - name: credentials
     secret:
       secretName: {{ include "skills-agent.secretName" . }}
-      defaultMode: 0400
+      defaultMode: 0440
   - name: workspace
     emptyDir: {}
   - name: agent-logs
@@ -256,14 +260,14 @@ volumes:
       items:
         - key: clickhouse-client-config.xml
           path: clickhouse-client-config.xml
-      defaultMode: 0400
+      defaultMode: 0440
   - name: altinity-mcp-config
     secret:
       secretName: {{ include "skills-agent.secretName" . }}
       items:
         - key: altinity-mcp-config.yaml
           path: altinity-mcp-config.yaml
-      defaultMode: 0400
+      defaultMode: 0440
   {{- if .Values.clickhouse.tls.ca }}
   - name: clickhouse-tls-ca
     secret:
@@ -271,7 +275,7 @@ volumes:
       items:
         - key: clickhouse-ca.crt
           path: clickhouse-ca.crt
-      defaultMode: 0400
+      defaultMode: 0440
   {{- end }}
   {{- if .Values.clickhouse.tls.cert }}
   - name: clickhouse-tls-cert
@@ -280,7 +284,7 @@ volumes:
       items:
         - key: clickhouse-client.crt
           path: clickhouse-client.crt
-      defaultMode: 0400
+      defaultMode: 0440
   {{- end }}
   {{- if .Values.clickhouse.tls.key }}
   - name: clickhouse-tls-key
@@ -289,7 +293,7 @@ volumes:
       items:
         - key: clickhouse-client.key
           path: clickhouse-client.key
-      defaultMode: 0400
+      defaultMode: 0440
   {{- end }}
 {{- with .Values.nodeSelector }}
 nodeSelector:
