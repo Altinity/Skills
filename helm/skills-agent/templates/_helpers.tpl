@@ -78,55 +78,37 @@ from other namespaces directly
 Build the command based on agent type
 */}}
 {{- define "skills-agent.command" -}}
-{{- if eq .Values.agent "claude" }}
 - /bin/sh
 - -c
 - |
-  WORK_DIR="/tmp/agent-logs"
   TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-  LOG_DIR="${WORK_DIR}/${TIMESTAMP}"
-  
-  echo "Creating log directory: ${LOG_DIR}"
-  mkdir -p "${LOG_DIR}"
-  
+  WORK_DIR="/workspace/${TIMESTAMP}"
+  echo "Creating work directory: ${WORK_DIR}"
+  mkdir -p "${WORK_DIR}"
+  cd $WORK_DIR
+  echo "Starting agent execution..."
+  set +e
+{{- if eq .Values.agent "claude" }}
+
   mkdir -p /home/bun/.claude
   cp /secrets/claude-credentials.json /home/bun/.claude/.credentials.json
   chmod 600 /home/bun/.claude/.credentials.json
-  cd /workspace
-  
-  echo "Starting agent execution..."
-  set +e
-  claude --dangerously-skip-permissions -p "/{{ .Values.skillName }} {{ .Values.prompt }}" 2>&1 | tee "${LOG_DIR}/agent-execution.log"
-  EXIT_CODE=$?
-  set -e
-  
-  echo "Agent execution completed with exit code: ${EXIT_CODE}"
-  
+
+  claude --dangerously-skip-permissions -p "/{{ .Values.skillName }} {{ .Values.prompt }}" 2>&1 | tee "./agent-execution.log"
+
 {{- else if eq .Values.agent "codex" }}
-- /bin/sh
-- -c
-- |
-  WORK_DIR="/tmp/agent-logs"
-  TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-  LOG_DIR="${WORK_DIR}/${TIMESTAMP}"
-  
-  echo "Creating log directory: ${LOG_DIR}"
-  mkdir -p "${LOG_DIR}"
-  
   mkdir -p /home/bun/.codex
   cp /secrets/codex-auth.json /home/bun/.codex/auth.json
   chmod 600 /home/bun/.codex/auth.json
-  cd /workspace
-  
-  echo "Starting agent execution..."
-  set +e
-  codex exec --dangerously-bypass-approvals-and-sandbox{{- if .Values.model }} --model "{{ .Values.model }}"{{- end }} '${{ .Values.skillName }} {{ .Values.prompt }}' 2>&1 | tee "${LOG_DIR}/agent-execution.log"
+
+  codex exec --dangerously-bypass-approvals-and-sandbox{{- if .Values.model }} --model "{{ .Values.model }}"{{- end }} '${{ .Values.skillName }} {{ .Values.prompt }}' 2>&1 | tee "./agent-execution.log"
+
+{{- end }}
   EXIT_CODE=$?
   set -e
   
   echo "Agent execution completed with exit code: ${EXIT_CODE}"
   
-{{- end }}
   {{- if .Values.storeResults.enabled }}
   if [ ${EXIT_CODE} -eq 0 ]; then
     echo "Uploading results to S3..."
@@ -140,17 +122,17 @@ Build the command based on agent type
     export AWS_DEFAULT_REGION="{{ .Values.storeResults.awsRegion }}"
     {{- end }}
     
-    aws s3 cp "${LOG_DIR}/" "${S3_PATH}" --recursive
+    aws s3 cp "${WORK_DIR}/" "${S3_PATH}" --recursive
     echo "Results uploaded to: ${S3_PATH}"
   else
     echo "Agent execution failed (exit code ${EXIT_CODE}), skipping S3 upload"
   fi
   {{- else }}
-  echo "S3 storage is disabled, logs remain in ${LOG_DIR}"
+  echo "S3 storage is disabled, logs remain in ${WORK_DIR}"
   {{- end }}
   {{- if .Values.debugMode }}
   echo "Debug mode enabled: keeping container alive for inspection"
-  echo "${EXIT_CODE}" > "${LOG_DIR}/exit_code"
+  echo "${EXIT_CODE}" > "${WORK_DIR}/exit_code"
   sleep infinity
   {{- else }}
   exit ${EXIT_CODE}
