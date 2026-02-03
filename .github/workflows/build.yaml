@@ -89,8 +89,9 @@ jobs:
       - name: Package Helm chart
         run: |
           helm package ./helm/skills-agent
+          ls -la *.tgz
 
       - name: Push Helm chart to OCI registry
         run: |
           CHART_VERSION=$(helm show chart ./helm/skills-agent | grep '^version:' | awk '{print $2}')
-          helm push skills-agent-${CHART_VERSION}.tgz oci://${{ env.REGISTRY }}/altinity/skills-helm-chart
+          helm push altinity-expert-${CHART_VERSION}.tgz oci://${{ env.REGISTRY }}/altinity/skills-helm-chart
