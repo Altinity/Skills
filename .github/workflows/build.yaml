@@ -17,8 +17,28 @@ env:
   IMAGE_NAME: altinity/expert
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      dockerfile: ${{ steps.filter.outputs.dockerfile }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changes
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            dockerfile:
+              - 'Dockerfile'
+
   build:
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.dockerfile == 'true'
     permissions:
       contents: read
       packages: write
@@ -67,7 +87,6 @@ jobs:
 
   helm:
     runs-on: ubuntu-latest
-    needs: build
     if: github.event_name != 'pull_request'
     permissions:
       contents: read
