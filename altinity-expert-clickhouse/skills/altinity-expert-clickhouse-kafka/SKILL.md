@@ -29,9 +29,9 @@ The `exceptions` column is a tuple of arrays with matching indices — `exceptio
 ### Slow Materialized Views (Poll Interval Risk)
 
 - MV avg duration > 30s → consumer may exceed `max.poll.interval.ms` and get kicked from the group
-- **Most common root cause:** MV uses multiple `JSONExtract` calls that each re-parse the same JSON blob
-- **Fix:** rewrite MV to parse JSON in one pass using `JSONExtract(json, 'Tuple(...)') AS parsed` then `tupleElement(parsed, 'field')` — see [troubleshooting.md](troubleshooting.md) for the rewrite pattern
-- Reference: https://kb.altinity.com/altinity-kb-queries-and-syntax/jsonextract-to-parse-many-attributes-at-a-time/
+- MV executions with error status → likely consumer rebalances (consumer kicked, MV interrupted mid-batch)
+- **Most common root cause for slow MVs:** multiple `JSONExtract` calls re-parsing the same JSON blob
+- **Fix:** rewrite to one-pass `JSONExtract(json, 'Tuple(...)') AS parsed` + `tupleElement()` — see [troubleshooting.md](troubleshooting.md)
 
 ### Pool Utilization Trends (12h)
 

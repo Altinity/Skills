@@ -72,8 +72,8 @@ ORDER BY time_bucket ASC, host ASC
 -- Common cause: multiple JSONExtract calls parsing the same JSON repeatedly
 SELECT
     hostName() AS host,
-    view_name,
     view_target,
+    status,
     count() AS executions,
     round(avg(view_duration_ms) / 1000, 1) AS avg_duration_s,
     round(max(view_duration_ms) / 1000, 1) AS max_duration_s,
@@ -81,16 +81,9 @@ SELECT
     sum(written_rows) AS total_rows_written
 FROM clusterAllReplicas('{cluster}', system.query_views_log)
 WHERE event_time > now() - INTERVAL 24 HOUR
-  AND view_type = 'Materialized'
-  AND status = 'QueryFinish'
-  AND view_name IN (
-      SELECT concat(database, '.', name)
-      FROM system.tables
-      WHERE engine = 'MaterializedView'
-        AND create_table_query LIKE '%Kafka%'
-  )
-GROUP BY host, view_name, view_target
+GROUP BY host, view_target, status
 ORDER BY avg_duration_s DESC
+LIMIT 10
 ;
 
 -- Kafka-related messages in logs
