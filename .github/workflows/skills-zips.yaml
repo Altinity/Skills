@@ -6,15 +6,11 @@ on:
       - main
     paths:
       - 'altinity-expert-clickhouse/skills/**'
-    paths-ignore:
-      - 'releases/**'
   pull_request:
     branches:
       - main
     paths:
       - 'altinity-expert-clickhouse/skills/**'
-    paths-ignore:
-      - 'releases/**'
 
 jobs:
   skills-packages:
