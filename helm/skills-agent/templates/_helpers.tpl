@@ -78,72 +78,32 @@ from other namespaces directly
 Build the command based on agent type
 */}}
 {{- define "skills-agent.command" -}}
-{{- if eq .Values.agent "claude" }}
 - /bin/sh
 - -c
 - |
-  WORK_DIR="/tmp/agent-logs"
   TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-  LOG_DIR="${WORK_DIR}/${TIMESTAMP}"
-  
-  echo "Creating log directory: ${LOG_DIR}"
-  mkdir -p "${LOG_DIR}"
-  
+  WORK_DIR="/workspace/${TIMESTAMP}"
+  echo "Creating work directory: ${WORK_DIR}"
+  mkdir -p "${WORK_DIR}"
+  cd $WORK_DIR
+  echo "Starting agent execution..."
+  set +e
+{{- if eq .Values.agent "claude" }}
+
   mkdir -p /home/bun/.claude
   cp /secrets/claude-credentials.json /home/bun/.claude/.credentials.json
   chmod 600 /home/bun/.claude/.credentials.json
-  cd /workspace
-  
-  echo "Starting agent execution..."
-  set +e
-  claude --dangerously-skip-permissions -p "/{{ .Values.skillName }} {{ .Values.prompt }}" 2>&1 | tee "${LOG_DIR}/agent-execution.log"
-  EXIT_CODE=$?
-  set -e
-  
-  echo "Agent execution completed with exit code: ${EXIT_CODE}"
-  
-  {{- if .Values.storeResults.enabled }}
-  if [ ${EXIT_CODE} -eq 0 ]; then
-    echo "Uploading results to S3..."
-    S3_BUCKET="{{ .Values.storeResults.s3Bucket }}"
-    S3_PREFIX="{{ .Values.storeResults.s3Prefix }}"
-    S3_PATH="s3://${S3_BUCKET}/${S3_PREFIX}/${TIMESTAMP}/"
-    
-    {{- if not .Values.storeResults.iamRoleArn }}
-    export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
-    export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
-    export AWS_DEFAULT_REGION="{{ .Values.storeResults.awsRegion }}"
-    {{- end }}
-    
-    aws s3 cp "${LOG_DIR}/" "${S3_PATH}" --recursive
-    echo "Results uploaded to: ${S3_PATH}"
-  else
-    echo "Agent execution failed (exit code ${EXIT_CODE}), skipping S3 upload"
-  fi
-  {{- else }}
-  echo "S3 storage is disabled, logs remain in ${LOG_DIR}"
-  {{- end }}
-  
-  exit ${EXIT_CODE}
+
+  claude --dangerously-skip-permissions -p "/{{ .Values.skillName }} {{ .Values.prompt }}" 2>&1 | tee "./agent-execution.log"
+
 {{- else if eq .Values.agent "codex" }}
-- /bin/sh
-- -c
-- |
-  WORK_DIR="/tmp/agent-logs"
-  TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-  LOG_DIR="${WORK_DIR}/${TIMESTAMP}"
-  
-  echo "Creating log directory: ${LOG_DIR}"
-  mkdir -p "${LOG_DIR}"
-  
   mkdir -p /home/bun/.codex
   cp /secrets/codex-auth.json /home/bun/.codex/auth.json
   chmod 600 /home/bun/.codex/auth.json
-  cd /workspace
-  
-  echo "Starting agent execution..."
-  set +e
-  codex --dangerously-skip-permissions "${{ .Values.skillName }} {{ .Values.prompt }}" 2>&1 | tee "${LOG_DIR}/agent-execution.log"
+
+  codex exec --dangerously-bypass-approvals-and-sandbox{{- if .Values.model }} --model "{{ .Values.model }}"{{- end }} '${{ .Values.skillName }} {{ .Values.prompt }}' 2>&1 | tee "./agent-execution.log"
+
+{{- end }}
   EXIT_CODE=$?
   set -e
   
@@ -162,15 +122,171 @@ Build the command based on agent type
     export AWS_DEFAULT_REGION="{{ .Values.storeResults.awsRegion }}"
     {{- end }}
     
-    aws s3 cp "${LOG_DIR}/" "${S3_PATH}" --recursive
+    aws s3 cp "${WORK_DIR}/" "${S3_PATH}" --recursive
     echo "Results uploaded to: ${S3_PATH}"
   else
     echo "Agent execution failed (exit code ${EXIT_CODE}), skipping S3 upload"
   fi
   {{- else }}
-  echo "S3 storage is disabled, logs remain in ${LOG_DIR}"
+  echo "S3 storage is disabled, logs remain in ${WORK_DIR}"
   {{- end }}
-  
+  {{- if .Values.debugMode }}
+  echo "Debug mode enabled: keeping container alive for inspection"
+  echo "${EXIT_CODE}" > "${WORK_DIR}/exit_code"
+  sleep infinity
+  {{- else }}
   exit ${EXIT_CODE}
+  {{- end }}
+{{- end }}
+
+{{/*
+Shared PodSpec fields for both Job and debug Pod
+Excludes restartPolicy (Pod vs Job differ) and template metadata (Job-only).
+*/}}
+{{- define "skills-agent.podSpecBase" -}}
+{{- with .Values.imagePullSecrets }}
+imagePullSecrets:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+serviceAccountName: {{ include "skills-agent.serviceAccountName" . }}
+{{- with .Values.podSecurityContext }}
+securityContext:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+containers:
+  - name: agent
+    image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+    imagePullPolicy: {{ .Values.image.pullPolicy }}
+    command:
+      {{- include "skills-agent.command" . | nindent 6 }}
+    env:
+      - name: HOME
+        value: /home/bun
+      {{- if and .Values.storeResults.enabled (not .Values.storeResults.iamRoleArn) }}
+      - name: AWS_ACCESS_KEY_ID
+        valueFrom:
+          secretKeyRef:
+            name: {{ include "skills-agent.fullname" . }}-aws-credentials
+            key: aws-access-key-id
+      - name: AWS_SECRET_ACCESS_KEY
+        valueFrom:
+          secretKeyRef:
+            name: {{ include "skills-agent.fullname" . }}-aws-credentials
+            key: aws-secret-access-key
+      - name: AWS_DEFAULT_REGION
+        value: {{ .Values.storeResults.awsRegion | quote }}
+      {{- end }}
+      {{- with .Values.extraEnv }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
+    resources:
+      {{- toYaml .Values.resources | nindent 6 }}
+    volumeMounts:
+      - name: credentials
+        mountPath: /secrets
+        readOnly: true
+      - name: workspace
+        mountPath: /workspace
+      - name: agent-logs
+        mountPath: /tmp/agent-logs
+      - name: clickhouse-client-config
+        mountPath: /etc/clickhouse-client/config.xml
+        subPath: clickhouse-client-config.xml
+        readOnly: true
+      - name: altinity-mcp-config
+        mountPath: /etc/altinity-mcp/config.yaml
+        subPath: altinity-mcp-config.yaml
+        readOnly: true
+      {{- if .Values.clickhouse.tls.ca }}
+      - name: clickhouse-tls-ca
+        mountPath: /etc/clickhouse-client/ca.crt
+        subPath: clickhouse-ca.crt
+        readOnly: true
+      - name: clickhouse-tls-ca
+        mountPath: /etc/altinity-mcp/ca.crt
+        subPath: clickhouse-ca.crt
+        readOnly: true
+      {{- end }}
+      {{- if .Values.clickhouse.tls.cert }}
+      - name: clickhouse-tls-cert
+        mountPath: /etc/clickhouse-client/client.crt
+        subPath: clickhouse-client.crt
+        readOnly: true
+      - name: clickhouse-tls-cert
+        mountPath: /etc/altinity-mcp/client.crt
+        subPath: clickhouse-client.crt
+        readOnly: true
+      {{- end }}
+      {{- if .Values.clickhouse.tls.key }}
+      - name: clickhouse-tls-key
+        mountPath: /etc/clickhouse-client/client.key
+        subPath: clickhouse-client.key
+        readOnly: true
+      - name: clickhouse-tls-key
+        mountPath: /etc/altinity-mcp/client.key
+        subPath: clickhouse-client.key
+        readOnly: true
+      {{- end }}
+volumes:
+  - name: credentials
+    secret:
+      secretName: {{ include "skills-agent.secretName" . }}
+      defaultMode: 0440
+  - name: workspace
+    emptyDir: {}
+  - name: agent-logs
+    emptyDir: {}
+  - name: clickhouse-client-config
+    secret:
+      secretName: {{ include "skills-agent.secretName" . }}
+      items:
+        - key: clickhouse-client-config.xml
+          path: clickhouse-client-config.xml
+      defaultMode: 0440
+  - name: altinity-mcp-config
+    secret:
+      secretName: {{ include "skills-agent.secretName" . }}
+      items:
+        - key: altinity-mcp-config.yaml
+          path: altinity-mcp-config.yaml
+      defaultMode: 0440
+  {{- if .Values.clickhouse.tls.ca }}
+  - name: clickhouse-tls-ca
+    secret:
+      secretName: {{ include "skills-agent.secretName" . }}
+      items:
+        - key: clickhouse-ca.crt
+          path: clickhouse-ca.crt
+      defaultMode: 0440
+  {{- end }}
+  {{- if .Values.clickhouse.tls.cert }}
+  - name: clickhouse-tls-cert
+    secret:
+      secretName: {{ include "skills-agent.secretName" . }}
+      items:
+        - key: clickhouse-client.crt
+          path: clickhouse-client.crt
+      defaultMode: 0440
+  {{- end }}
+  {{- if .Values.clickhouse.tls.key }}
+  - name: clickhouse-tls-key
+    secret:
+      secretName: {{ include "skills-agent.secretName" . }}
+      items:
+        - key: clickhouse-client.key
+          path: clickhouse-client.key
+      defaultMode: 0440
+  {{- end }}
+{{- with .Values.nodeSelector }}
+nodeSelector:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- with .Values.affinity }}
+affinity:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- with .Values.tolerations }}
+tolerations:
+  {{- toYaml . | nindent 2 }}
 {{- end }}
 {{- end }}

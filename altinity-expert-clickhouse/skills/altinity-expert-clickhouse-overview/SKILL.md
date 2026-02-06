@@ -7,11 +7,45 @@ description: Runs a quick overview of Clickhouse server health.
 
 ## Predefined SQL
 
-Run reporting SQL queries from files:
+Run reporting SQL queries from files in Skill directory:
 - checks.sql 
 - metrics.sql
 - ddl_queue.sql
-- text_log.sql
+
+Inline SQL below (version/enablement sensitive):
+
+### Detached Parts 
+
+version-dependent: ClickHouse 23.8 does not have modification_time 
+
+```sql
+SELECT
+  hostName() AS host,
+  database,
+  table,
+  reason,
+  count() AS detached_parts,
+  formatReadableSize(sum(bytes_on_disk)) AS bytes,
+  min(modification_time) AS first_detach,
+  max(modification_time) AS last_detach
+FROM system.detached_parts
+GROUP BY host, database, table, reason
+ORDER BY detached_parts DESC
+LIMIT 100
+```
+
+### Text Log 
+(may be disabled)
+
+```sql
+select event_date, level, thread_name, any(logger_name) as logger_name,
+       message_format_string, count(*) as count
+from   system.text_log
+where  event_date > now() - interval 24 hour
+  and level <= 'Warning'
+group by all
+order by level, thread_name, message_format_string
+```
 
 ### Check Pools
 

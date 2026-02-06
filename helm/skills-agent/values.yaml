@@ -5,6 +5,19 @@ debugMode: false
 # Available agents: codex, claude
 agent: claude
 
+# Model selection (Codex only; passed as --model / -m)
+# Recommended/available Codex models:
+# - gpt-5.2-codex
+# - gpt-5.1-codex-mini
+# - gpt-5.1-codex-max
+# - gpt-5.2
+# - gpt-5.1
+# - gpt-5.1-codex
+# - gpt-5-codex
+# - gpt-5-codex-mini
+# - gpt-5
+model: ""
+
 # Skill name to run (without leading / or $)
 # Examples: altinity-clickhouse-expert, altinity-expert-clickhouse-audit
 skillName: altinity-clickhouse-expert
@@ -14,7 +27,7 @@ prompt: "Analyze ClickHouse cluster health"
 
 # Image configuration
 image:
-  repository: ghcr.io/altinity/skills
+  repository: ghcr.io/altinity/expert
   tag: latest
   pullPolicy: IfNotPresent
 
@@ -32,6 +45,13 @@ job:
   ttlSecondsAfterFinished: 3600
   # Active deadline seconds (timeout)
   activeDeadlineSeconds: 1800
+
+# Pod security context (for non-root execution)
+podSecurityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  fsGroupChangePolicy: OnRootMismatch
 
 # Resource limits
 resources:

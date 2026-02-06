@@ -22,44 +22,6 @@ HAVING count_all > 50
 ORDER BY severity ASC, queue_size DESC, host ASC
 LIMIT 200;
 
-/* 2) Oldest tasks in queue (per host)
-Interpretation:
-- oldest_task_age_sec >> 0 means the queue has been non-empty for a long time.
-*/
-WITH
-  dateDiff('second', min(create_time), now()) AS oldest_task_age_sec
-SELECT
-  hostName() AS host,
-  database,
-  table,
-  oldest_task_age_sec,
-  formatReadableTimeDelta(oldest_task_age_sec) AS oldest_task_age,
-  multiIf(oldest_task_age_sec > 86400, 'Critical', oldest_task_age_sec > 7200, 'Major', oldest_task_age_sec > 1800, 'Moderate', 'OK') AS severity,
-  count() AS tasks_in_queue
-FROM clusterAllReplicas('{cluster}', system.replication_queue)
-GROUP BY host, database, table
-HAVING oldest_task_age_sec > 300
-ORDER BY severity ASC, oldest_task_age_sec DESC, host ASC
-LIMIT 200;
-
-/* 3) Stalled tasks detection (per host)
-Stalled ~ no attempts and no postpones recently (last 10 minutes).
-*/
-WITH
-  greatest(create_time, last_attempt_time, last_postpone_time) < now() - 600 AS no_activity
-SELECT
-  hostName() AS host,
-  database,
-  table,
-  countIf(no_activity) AS stalled_tasks,
-  count() AS total_tasks,
-  round(100.0 * countIf(no_activity) / count(), 1) AS stalled_pct
-FROM clusterAllReplicas('{cluster}', system.replication_queue)
-GROUP BY host, database, table
-HAVING stalled_tasks > 0
-ORDER BY stalled_tasks DESC
-LIMIT 200;
-
 /* 4) Queue tasks with errors/backoff (per host)
 Use this to identify a table/type to drill down further.
 */

@@ -1,7 +1,5 @@
 /* 1) Keeper/ZooKeeper session status (per host) */
-SELECT
-  hostName() AS ch_host,
-  *
+SELECT hostName() AS ch_host, *
 FROM clusterAllReplicas('{cluster}', system.zookeeper_connection)
 ORDER BY host;
 
@@ -45,23 +43,3 @@ SELECT
 FROM clusterAllReplicas('{cluster}', system.replicas)
 ORDER BY severity ASC, absolute_delay DESC
 LIMIT 200;
-
-/* 3) Readonly/session-expired replicas (details)
-If found: prioritize ZooKeeper connectivity, disk space, and text_log around readonly_start_time.
-*/
-SELECT
-  hostName() AS host,
-  database,
-  table,
-  is_readonly,
-  readonly_start_time,
-  is_session_expired,
-  zookeeper_name,
-  zookeeper_path,
-  replica_name,
-  replica_path,
-  zookeeper_exception,
-  last_queue_update_exception
-FROM clusterAllReplicas('{cluster}', system.replicas)
-WHERE is_readonly = 1 OR is_session_expired = 1
-ORDER BY host, database, table;

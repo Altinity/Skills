@@ -1,3 +1,30 @@
+-- Kafka Health
+select
+    database,
+    table,
+    sum(is_currently_used) as active_consumers,
+    count() as total_consumers,
+    max(dateDiff('second', last_poll_time, now())) as max_poll_age_s,
+    max(dateDiff('second', last_commit_time, now())) as max_commit_age_s,
+    sum(length(exceptions.text)) as total_exceptions,
+    max(length(exceptions.text)) as max_exceptions
+from clusterAllReplicas('{cluster}', system.kafka_consumers)
+group by database, table
+order by total_exceptions desc, max_poll_age_s desc
+limit 50
+;
+
+-- Kafka scheduling capacity
+select
+    hostName() as host,
+    sumIf(value, metric = 'KafkaConsumers') as kafka_consumers,
+    sumIf(value, metric = 'BackgroundMessageBrokerSchedulePoolSize') as mb_pool_size
+from clusterAllReplicas('{cluster}', system.metrics)
+where metric in ('KafkaConsumers','BackgroundMessageBrokerSchedulePoolSize')
+group by host
+order by host
+;
+
 -- Current Insert Activity
 select
     hostName() as host,
@@ -129,23 +156,23 @@ limit 30
 ;
 
 -- Batch Size Analysis
--- Recommendations:
--- avg_batch_rows < 1000 → Seriously under-batched
--- avg_batch_rows < 10000 → Could improve
--- avg_batch_rows > 100000 → Good batching
--- Ideal: 10K-1M rows per insert
 select
     hostName() as host,
     arrayStringConcat(tables, ', ') as target_tables,
     count() as insert_count,
     round(avg(written_rows)) as avg_batch_rows,
+    multiIf(avg_batch_rows > '100000', 'Good batching',
+            avg_batch_rows > '10000', 'Mostly OK',
+            avg_batch_rows > '1000', 'Could improve',
+         'Seriously under-batched'
+    ) as batch_status,
     min(written_rows) as min_batch,
     max(written_rows) as max_batch,
     round(quantile(0.5)(written_rows)) as median_batch
 from clusterAllReplicas('{cluster}', system.query_log)
 where type = 'QueryFinish'
   and query_kind = 'Insert'
-  and event_date = today()
+  and event_time > now() - interval 24 hour
   and written_rows > 0
   and length(tables) > 0
 group by host, tables
@@ -180,7 +207,7 @@ order by event_time desc, host asc
 limit 50
 ;
 
--- Buffer Table Flush Patterns
+-- Optional Context: Buffer Table Flush Patterns
 -- Buffer table status
 select
     hostName() as host,
@@ -192,7 +219,7 @@ from clusterAllReplicas('{cluster}', system.tables)
 where engine = 'Buffer'
 ;
 
--- Check current settings for insert
+-- Optional Context: Check current settings for insert
 select
     hostName() as host,
     name, value, changed

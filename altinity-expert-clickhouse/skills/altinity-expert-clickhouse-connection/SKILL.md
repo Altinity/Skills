@@ -1,6 +1,6 @@
 ---
 name: altinity-expert-clickhouse-connection
-description: Base for any clickhouse analysis by any of altinity-expert-clickhouse skills. Use it before running any other diagnostics.
+description: Should be used when doing clickhouse analysis and diagnostics review before any altinity-expert-clickhouse skill to test clickhouse connection and set general rules
 ---
 
 ## Connection mode
@@ -16,14 +16,15 @@ select
     (select value from system.asynchronous_metrics where metric = 'OSMemoryTotal') as os_memory_total
 ```
 
-### MCP mode (preferred)
+### MCP mode 
 
+Try to use MCP server with clickhouse in the name.
 If multiple ClickHouse MCP servers are available, ask the user which one to use.
 When executing queries by the MCP server, push a single SQL statement to the MCP server (no multy query!)
 
 ### Exec mode (clickhouse-client)
 
-- try to run `clickhouse-client`. Don't rely on env vars. On failure, ask how to run it properly.
+- if MCP is unavailable, try to run `clickhouse-client`. Don't rely on env vars. On failure, ask how to run it properly.
 - Prefer running queries from a `.sql` file with `--queries-file` and forcing JSON output (`-f JSON`) when capturing results to files.
 
 ## Cluster selection for `clusterAllReplicas('{cluster}', ...)`
@@ -43,9 +44,14 @@ When executing queries by the MCP server, push a single SQL statement to the MCP
 ```
 - never expend time window without an explicit user prompt. If needed, ask user to extend time window
 
+## Schema-safe rule 
+
+- If a query fails with `UNKNOWN_IDENTIFIER`, run `DESCRIBE TABLE system.<table>` and drop/adjust only the missing columns.
+- If a query fails with `UNKNOWN_TABLE`, skip that query and note the table is disabled or unavailable (e.g., `system.part_log`, `system.detached_parts`).
+
 ## Report Output 
 
-In all reports always provide a header with information:
+In all reports, always provide a header with information:
 - Connection mode used: MCP or clickhouse-client
 - cluster name (or “no cluster / single node”)
 - clickhouse version
