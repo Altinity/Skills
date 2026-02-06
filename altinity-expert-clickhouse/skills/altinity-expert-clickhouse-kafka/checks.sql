@@ -22,7 +22,7 @@ SELECT
     database,
     `table`,
     length(assignments.topic) AS assigned_partitions,
-    num_messages_read / num_commits AS avg_rows_per_commit
+    intDivOrZero(num_messages_read, num_commits) AS avg_rows_per_commit
 FROM clusterAllReplicas('{cluster}', system.kafka_consumers)
 ORDER BY database ASC, `table` ASC, host ASC
 ;
