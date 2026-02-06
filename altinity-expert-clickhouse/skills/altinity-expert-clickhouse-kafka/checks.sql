@@ -67,6 +67,32 @@ GROUP BY host, time_bucket
 ORDER BY time_bucket ASC, host ASC
 ;
 
+-- Slow Materialized Views on Kafka Tables (24h)
+-- Red flag: avg duration > 30s → MV processing too slow, risks poll interval exceeded
+-- Common cause: multiple JSONExtract calls parsing the same JSON repeatedly
+SELECT
+    hostName() AS host,
+    view_name,
+    view_target,
+    count() AS executions,
+    round(avg(view_duration_ms) / 1000, 1) AS avg_duration_s,
+    round(max(view_duration_ms) / 1000, 1) AS max_duration_s,
+    round(quantile(0.95)(view_duration_ms) / 1000, 1) AS p95_duration_s,
+    sum(written_rows) AS total_rows_written
+FROM clusterAllReplicas('{cluster}', system.query_views_log)
+WHERE event_time > now() - INTERVAL 24 HOUR
+  AND view_type = 'Materialized'
+  AND status = 'QueryFinish'
+  AND view_name IN (
+      SELECT concat(database, '.', name)
+      FROM system.tables
+      WHERE engine = 'MaterializedView'
+        AND create_table_query LIKE '%Kafka%'
+  )
+GROUP BY host, view_name, view_target
+ORDER BY avg_duration_s DESC
+;
+
 -- Kafka-related messages in logs
 SELECT
     hostName() AS host,
