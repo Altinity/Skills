@@ -1,8 +1,4 @@
--- Current Merge Activity
--- Interpretation:
--- elapsed > 3600 (1 hour) → Investigate large parts or slow storage
--- num_parts > 100 → Merge backlog, check part creation rate
--- is_mutation = 1 → This is a mutation, not a regular merge
+-- 1) Current merge activity with memory and algorithm/type
 select
     hostName() as host,
     database,
@@ -10,137 +6,120 @@ select
     round(elapsed, 1) as elapsed_sec,
     round(progress * 100, 1) as progress_pct,
     num_parts,
-    formatReadableSize(total_size_bytes_compressed) as size,
-    result_part_name,
-    is_mutation
+    merge_type,
+    merge_algorithm,
+    formatReadableSize(total_size_bytes_compressed) as source_size,
+    formatReadableSize(memory_usage) as memory_usage,
+    is_mutation,
+    result_part_name
 from clusterAllReplicas('{cluster}', system.merges)
 order by elapsed desc, host asc
-limit 20
+limit 100
 ;
 
--- Part Count Health Check
--- Red flags:
--- part_count > 300 → Approaching "too many parts" error threshold
--- Many partitions with high counts → Ingestion batching problem
+-- 2) Active merge memory summary by host
+select
+    hostName() as host,
+    count() as active_merges,
+    formatReadableSize(sum(memory_usage)) as total_merge_memory,
+    formatReadableSize(max(memory_usage)) as max_single_merge_memory
+from clusterAllReplicas('{cluster}', system.merges)
+group by host
+order by sum(memory_usage) desc, host asc
+limit 100
+;
+
+-- 3) Active merge memory summary cluster-wide
+select
+    count() as active_merges,
+    formatReadableSize(sum(memory_usage)) as cluster_total_merge_memory,
+    formatReadableSize(max(memory_usage)) as cluster_max_single_merge_memory
+from clusterAllReplicas('{cluster}', system.merges)
+;
+
+-- 4) Merge success/failure trend by hour (24h)
+select
+    hostName() as host,
+    toStartOfHour(event_time) as hour,
+    countIf(event_type = 'MergeParts' and error = 0) as merge_ok,
+    countIf(event_type = 'MergeParts' and error != 0) as merge_failed,
+    round(100.0 * merge_failed / nullIf(merge_ok + merge_failed, 0), 2) as fail_pct
+from clusterAllReplicas('{cluster}', system.part_log)
+where event_time >= now() - interval 24 hour
+group by host, hour
+order by hour desc, host asc
+limit 500
+;
+
+-- 5) Table-level merge verdict summary (24h)
+select
+    database,
+    table,
+    countIf(event_type = 'MergeParts' and error = 0) as merge_ok_24h,
+    countIf(event_type = 'MergeParts' and error != 0) as merge_failed_24h,
+    maxIf(event_time, event_type = 'MergeParts' and error = 0) as last_merge_ok_time,
+    maxIf(event_time, event_type = 'MergeParts' and error != 0) as last_merge_fail_time
+from clusterAllReplicas('{cluster}', system.part_log)
+where event_time >= now() - interval 24 hour
+group by database, table
+having merge_ok_24h + merge_failed_24h > 0
+order by merge_failed_24h desc, merge_ok_24h asc
+limit 200
+;
+
+-- 6) Merge reason + algorithm matrix (24h)
+select
+    database,
+    table,
+    merge_reason,
+    merge_algorithm,
+    count() as merge_events,
+    countIf(error != 0) as failed_events,
+    round(100.0 * failed_events / count(), 2) as failed_pct,
+    round(avg(duration_ms)) as avg_duration_ms,
+    round(quantile(0.95)(duration_ms)) as p95_duration_ms,
+    formatReadableSize(sum(size_in_bytes)) as result_bytes,
+    sum(rows) as result_rows,
+    max(event_time) as last_event_time
+from clusterAllReplicas('{cluster}', system.part_log)
+where event_time >= now() - interval 24 hour
+  and event_type = 'MergeParts'
+group by database, table, merge_reason, merge_algorithm
+order by merge_events desc
+limit 500
+;
+
+-- 7) Peak merge RAM by table from part_log (24h)
+select
+    database,
+    table,
+    count() as merge_events,
+    countIf(error != 0) as failed_merges,
+    formatReadableSize(sum(peak_memory_usage)) as sum_peak_memory,
+    formatReadableSize(avg(peak_memory_usage)) as avg_peak_memory,
+    formatReadableSize(quantileExact(0.95)(peak_memory_usage)) as p95_peak_memory,
+    formatReadableSize(max(peak_memory_usage)) as max_peak_memory,
+    max(event_time) as last_merge_time
+from clusterAllReplicas('{cluster}', system.part_log)
+where event_time >= now() - interval 24 hour
+  and event_type = 'MergeParts'
+group by database, table
+order by max(peak_memory_usage) desc
+limit 200
+;
+
+-- 8) Part count offenders
 select
     hostName() as host,
     database,
     table,
     partition_id,
     count() as part_count,
-    sum(rows) as total_rows,
     formatReadableSize(sum(bytes_on_disk)) as size
 from clusterAllReplicas('{cluster}', system.parts)
 where active
 group by host, database, table, partition_id
 having part_count > 50
 order by part_count desc, host asc
-limit 30
-;
-
--- Recent Merge History (Last Hour)
-select
-    hostName() as host,
-    database,
-    table,
-    toStartOfFiveMinutes(event_time) as ts,
-    count() as merge_count,
-    sum(rows) as rows_merged,
-    round(avg(duration_ms)) as avg_duration_ms,
-    round(max(duration_ms)) as max_duration_ms
-from clusterAllReplicas('{cluster}', system.part_log)
-where event_type = 'MergeParts'
-  and event_time > now() - interval 1 hour
-group by host, database, table, ts
-order by ts desc, merge_count desc, host asc
-limit 50
-;
-
--- Merge Reasons Breakdown
--- Merge reasons:
--- RegularMerge → Normal background merges
--- TTLDeleteMerge → TTL expiration triggered
--- TTLRecompressMerge → TTL recompression
--- MutationMerge → ALTER UPDATE/DELETE
-select
-    hostName() as host,
-    database,
-    table,
-    merge_reason,
-    count() as merge_count,
-    round(avg(duration_ms)) as avg_ms,
-    sum(rows) as total_rows
-from clusterAllReplicas('{cluster}', system.part_log)
-where event_type = 'MergeParts'
-  and event_date = today()
-group by host, database, table, merge_reason
-order by merge_count desc, host asc
-limit 30
-;
-
--- "Too Many Parts" Error Investigation
--- Step 1: Find the problematic table
-select
-    hostName() as host,
-    database,
-    table,
-    count() as active_parts,
-    uniq(partition_id) as partitions
-from clusterAllReplicas('{cluster}', system.parts)
-where active
-group by host, database, table
-order by active_parts desc, host asc
-limit 10
-;
-
--- Slow Merge Investigation
--- Find slowest merges
--- Correlate with storage (load altinity-expert-clickhouse-storage):
--- Slow merges + high disk IO → Storage bottleneck
--- Slow merges + normal disk → Large parts, consider partitioning
-select
-    hostName() as host,
-    event_time,
-    database,
-    table,
-    partition_id,
-    duration_ms,
-    formatReadableSize(size_in_bytes) as size,
-    rows,
-    part_name,
-    merge_reason
-from clusterAllReplicas('{cluster}', system.part_log)
-where event_type = 'MergeParts'
-  and event_date >= today() - 1
-order by duration_ms desc, host asc
-limit 20
-;
-
--- Failed Merges
-select
-    hostName() as host,
-    event_time,
-    database,
-    table,
-    part_name,
-    error,
-    exception
-from clusterAllReplicas('{cluster}', system.part_log)
-where event_type = 'MergeParts'
-  and error != 0
-  and event_date >= today() - 7
-order by event_time desc, host asc
-limit 50
-;
-
--- Query current merge_tree_settings values
-select
-    hostName() as host,
-    name, value, changed, description
-from clusterAllReplicas('{cluster}', system.merge_tree_settings)
-where name in (
-    'max_parts_to_merge_at_once',
-    'parts_to_throw_insert',
-    'parts_to_delay_insert'
-)
+limit 200
 ;
