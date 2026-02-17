@@ -2,3 +2,5 @@
 .claude/
 **/.claude/
 output/
+altinity-expert-clickhouse/skills/.system/
+releases/*.zip
