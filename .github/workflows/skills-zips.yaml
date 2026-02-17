@@ -145,9 +145,16 @@ jobs:
 
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
+      - name: Render release notes from template
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ steps.meta.outputs.tag }}"
+          sed "s/{{TAG}}/${tag}/g" .github/release-notes-skills.md > /tmp/release-notes.md
+
       - name: Publish GitHub release assets
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
+          body_path: /tmp/release-notes.md
           files: dist/*.zip
-          generate_release_notes: true
