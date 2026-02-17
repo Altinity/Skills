@@ -4,10 +4,10 @@ This repository contains skills used for ClickHouse DB performance and schema an
 
 ## Core Skills
 - `altinity-expert-clickhouse/`: Modular ClickHouse diagnostic skill set. Each module is a standalone skill under `altinity-expert-clickhouse/skills/` (e.g., memory, merges, replication).
-- `releases/`: Built zip packages for distribution (one per skill).
 
-## Auto-build of Releases
-On pushes to `main`, GitHub Actions rebuilds **only the changed skills** under `altinity-expert-clickhouse/skills/` and commits updated zips to `releases/`.
+## Packaging and Releases
+- On PRs and pushes to `main`, GitHub Actions packages changed skills and uploads zip files as workflow artifacts.
+- On tags matching `skills-v*`, GitHub Actions packages all skills and publishes them as GitHub Release assets.
 
 ## Use installed skills
 
@@ -69,7 +69,7 @@ ln -s /absolute/path/to/Skills/altinity-expert-clickhouse/skills ~/.gemini/skill
 
 
 ### Claude.ai (web)
-Download the zip files from https://github.com/Altinity/skills/releases/ and upload them in Settings (or Admin Settings for org‑wide use) to Capabilities section. 
+Download the zip files from https://github.com/Altinity/Skills/releases and upload them in Settings (or Admin Settings for org‑wide use) to Capabilities section.
 
 
 ## Docker Image

@@ -1,15 +1,17 @@
-name: Auto-build Skill Zips
+name: Skill Packages
 
 on:
   workflow_dispatch:
     inputs:
       skills:
-        description: 'Space-separated skill names to rebuild (leave empty to rebuild all)'
+        description: 'Space-separated skill names to package (empty = auto-detect changed, on tags = all)'
         required: false
         default: ''
   push:
     branches:
       - main
+    tags:
+      - 'skills-v*'
     paths:
       - 'altinity-expert-clickhouse/skills/**'
   pull_request:
@@ -19,68 +21,98 @@ on:
       - 'altinity-expert-clickhouse/skills/**'
 
 jobs:
-  skills-packages:
+  build-skill-zips:
     runs-on: ubuntu-latest
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.actor != 'github-actions[bot]'
     permissions:
-      contents: write
+      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Detect changed skills
+      - name: Select skills to package
         id: changes
+        shell: bash
         run: |
+          set -euo pipefail
+          list_all_skills() {
+            find altinity-expert-clickhouse/skills -mindepth 1 -maxdepth 1 -type d -name 'altinity-*' \
+              -exec sh -c 'for d; do [ -f "$d/SKILL.md" ] && basename "$d"; done' sh {} + | sort -u
+          }
+
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             INPUT_SKILLS="${{ github.event.inputs.skills }}"
             if [ -n "$INPUT_SKILLS" ]; then
-              echo "Manual run: building specified skills: $INPUT_SKILLS"
-              echo "skills=$INPUT_SKILLS" >> "$GITHUB_OUTPUT"
+              printf '%s\n' "$INPUT_SKILLS" | tr ' ' '\n' | awk 'NF' | sort -u > /tmp/skills.txt
+            elif [[ "${GITHUB_REF}" == refs/tags/skills-v* ]]; then
+              list_all_skills > /tmp/skills.txt
             else
-              echo "Manual run: building all skills"
-              SKILLS=$(ls -d altinity-expert-clickhouse/skills/*/SKILL.md 2>/dev/null | awk -F/ '{print $3}' | sort -u | tr '\n' ' ')
-              echo "skills=$SKILLS" >> "$GITHUB_OUTPUT"
+              BASE="$(git merge-base origin/main HEAD || true)"
+              HEAD="${{ github.sha }}"
+              if [ -n "$BASE" ]; then
+                git diff --name-only "$BASE" "$HEAD" | awk -F/ '/^altinity-expert-clickhouse\/skills\//{print $3}' | sort -u > /tmp/skills.txt
+              else
+                list_all_skills > /tmp/skills.txt
+              fi
             fi
+          elif [[ "${GITHUB_REF}" == refs/tags/skills-v* ]]; then
+            list_all_skills > /tmp/skills.txt
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+            git diff --name-only "$BASE" "$HEAD" | awk -F/ '/^altinity-expert-clickhouse\/skills\//{print $3}' | sort -u > /tmp/skills.txt
           else
             BEFORE="${{ github.event.before }}"
             SHA="${{ github.sha }}"
-            echo "Comparing $BEFORE..$SHA"
-            CHANGED=$(git diff --name-only "$BEFORE" "$SHA" | grep '^altinity-expert-clickhouse/skills/' || true)
-            if [ -z "$CHANGED" ]; then
-              echo "skills=" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            SKILLS=$(echo "$CHANGED" | awk -F/ '{print $3}' | sort -u | tr '\n' ' ')
-            echo "skills=$SKILLS" >> "$GITHUB_OUTPUT"
+            git diff --name-only "$BEFORE" "$SHA" | awk -F/ '/^altinity-expert-clickhouse\/skills\//{print $3}' | sort -u > /tmp/skills.txt
           fi
 
-      - name: Build changed skill zips
+          # Keep only existing skills (deleted skills are skipped for packaging).
+          awk 'NF' /tmp/skills.txt | while read -r skill; do
+            [ -f "altinity-expert-clickhouse/skills/$skill/SKILL.md" ] && echo "$skill"
+          done | sort -u > /tmp/skills-final.txt
+
+          skills="$(paste -sd' ' /tmp/skills-final.txt || true)"
+          echo "skills=$skills" >> "$GITHUB_OUTPUT"
+          echo "Selected skills: ${skills:-<none>}"
+
+      - name: Build skill zips
         if: steps.changes.outputs.skills != ''
+        shell: bash
         run: |
-          mkdir -p releases
+          set -euo pipefail
+          mkdir -p dist
           for skill in ${{ steps.changes.outputs.skills }}; do
             dir="altinity-expert-clickhouse/skills/$skill"
-            zip_path="releases/${skill}.zip"
-            if [ -f "$dir/SKILL.md" ]; then
-              echo "Packaging $skill..."
-              (cd "$dir" && zip -r "$GITHUB_WORKSPACE/$zip_path" . -x "*.DS_Store" -x "*__MACOSX*" -x "*.git*")
-            else
-              echo "Skill removed: $skill (deleting zip)"
-              rm -f "$zip_path"
-            fi
+            zip_path="dist/${skill}.zip"
+            echo "Packaging $skill..."
+            (cd "$dir" && zip -r "$GITHUB_WORKSPACE/$zip_path" . -x "*.DS_Store" -x "*__MACOSX*" -x "*.git*" -x ".system/*")
           done
 
-      - name: Commit and push zips
+      - name: Upload build artifact
         if: steps.changes.outputs.skills != ''
-        run: |
-          git add releases/*.zip || true
-          if git diff --cached --quiet; then
-            echo "No zip changes to commit."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Update skill zips [skip ci]"
-          git push
+        uses: actions/upload-artifact@v4
+        with:
+          name: skill-zips
+          path: dist/*.zip
+          if-no-files-found: error
+
+  publish-github-release:
+    runs-on: ubuntu-latest
+    needs: build-skill-zips
+    if: startsWith(github.ref, 'refs/tags/skills-v')
+    permissions:
+      contents: write
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: skill-zips
+          path: dist
+
+      - name: Publish GitHub release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          generate_release_notes: true
