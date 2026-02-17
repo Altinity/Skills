@@ -1,12 +1,12 @@
 FROM ghcr.io/altinity/altinity-mcp:latest AS mcp
 
 FROM docker.io/oven/bun:debian
-RUN bash -xec "apt-get update && apt-get install --no-install-recommends -y wget gpg curl ca-certificates unzip git git-lfs && \
-    wget -qO- 'https://packages.clickhouse.com/rpm/lts/repodata/repomd.xml.key' | gpg --dearmor --verbose -o /usr/share/keyrings/clickhouse-keyring.gpg && \
-    echo 'deb [signed-by=/usr/share/keyrings/clickhouse-keyring.gpg arch=$(dpkg --print-architecture)] https://packages.clickhouse.com/deb stable main' > /etc/apt/sources.list.d/clickhouse.list && \
-    apt-get update -y && \
+ARG CODEX_VERSION=latest
+ARG CLAUDE_CODE_VERSION=latest
+ARG TOOLCHAIN_REFRESH=static
+
+RUN bash -xec "apt-get update && apt-get install --no-install-recommends -y curl ca-certificates unzip git git-lfs && \
     update-ca-certificates && \
-    apt-get install --no-install-recommends -y clickhouse-client && \
     curl 'https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip' -o /tmp/awscliv2.zip && \
     unzip -q /tmp/awscliv2.zip -d /tmp && \
     /tmp/aws/install && \
@@ -19,8 +19,15 @@ ENV HOME=/home/bun
 ENV BUN_INSTALL=/opt/bun
 ENV PATH="/opt/bun/bin:${PATH}"
 
-RUN bun install -g @openai/codex@latest \
-  && bun install -g @anthropic-ai/claude-code@latest \
+RUN bun install -g @openai/codex@${CODEX_VERSION} \
+  && bun install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} \
+  && echo "toolchain_refresh=${TOOLCHAIN_REFRESH}" >/tmp/toolchain-refresh.txt \
+  && rm -f /usr/local/bin/codex \
+  && rm -f /usr/local/bin/claude \
+  && printf '%s\n' '#!/usr/bin/env bash' 'exec bun /opt/bun/install/global/node_modules/@openai/codex/bin/codex.js "$@"' > /usr/local/bin/codex \
+  && chmod +x /usr/local/bin/codex \
+  && printf '%s\n' '#!/usr/bin/env bash' 'exec bun /opt/bun/install/global/node_modules/@anthropic-ai/claude-code/cli.js "$@"' > /usr/local/bin/claude \
+  && chmod +x /usr/local/bin/claude \
   && bunx skills add --global --agent claude-code --yes Altinity/Skills \
   && bunx skills add --global --agent codex --yes Altinity/Skills \
   && codex --version \

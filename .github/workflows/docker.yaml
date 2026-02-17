@@ -1,6 +1,7 @@
 name: Build and Push Docker Image
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -8,11 +9,13 @@ on:
       - 'v*'
     paths:
       - 'Dockerfile'
+      - '.github/workflows/docker.yaml'
   pull_request:
     branches:
       - main
     paths:
       - 'Dockerfile'
+      - '.github/workflows/docker.yaml'
 
 env:
   REGISTRY: ghcr.io
@@ -64,5 +67,9 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            CODEX_VERSION=latest
+            CLAUDE_CODE_VERSION=latest
+            TOOLCHAIN_REFRESH=${{ github.run_id }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
