@@ -40,14 +40,14 @@ npx skills add Altinity/skills
 
 variants:
 - use $skill-installer skill inside codex
-- clone repo and copy needed skills into ~/.codex/skill directory.
+- clone repo and copy needed skills into ~/.codex/skills directory.
 - clone repo and ln (symlink) repo's skill directory into ~/.codex
 
 ### Claude CLI (Claude Code)
 
 variants:
 - claude skills add URL
-- clone repo and copy needed skills into ~/.claude/skill directory.
+- clone repo and copy needed skills into ~/.claude/skills directory.
 - clone repo and ln (symlink) repo's skill directory into ~/.claude
 
 ### Gemini CLI
@@ -83,7 +83,6 @@ docker pull ghcr.io/altinity/expert:latest
 The image includes:
 - `claude` - Anthropic Claude Code CLI
 - `codex` - OpenAI Codex CLI
-- `clickhouse-client` - ClickHouse client
 - `altinity-mcp` - Altinity MCP server
 
 ### Run locally with Docker
@@ -99,7 +98,7 @@ docker run -it --rm \
 docker run -it --rm \
   -v ~/.codex:/home/bun/.codex \
   ghcr.io/altinity/expert:latest \
-  codex --dangerously-skip-permissions "\$altinity-expert-clickhouse-overview Analyze cluster health"
+  codex exec --dangerously-bypass-approvals-and-sandbox "\$altinity-expert-clickhouse-overview Analyze cluster health"
 ```
 
 ## Kubernetes Helm Chart
