@@ -5,7 +5,7 @@ ARG CODEX_VERSION=latest
 ARG CLAUDE_CODE_VERSION=latest
 ARG TOOLCHAIN_REFRESH=static
 
-RUN bash -xec "apt-get update && apt-get install --no-install-recommends -y curl ca-certificates unzip git git-lfs && \
+RUN bash -xec "apt-get update && apt-get install --no-install-recommends -y curl ca-certificates unzip git git-lfs ripgrep && \
     update-ca-certificates && \
     curl 'https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip' -o /tmp/awscliv2.zip && \
     unzip -q /tmp/awscliv2.zip -d /tmp && \
