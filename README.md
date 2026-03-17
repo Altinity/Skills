@@ -280,7 +280,7 @@ Example:
 ```bash
 export EXPERT_CH_USER=default
 export EXPERT_RUNTIME=codex
-k8s/scripts/run-expert-job.sh ather prod 'my-clickhouse-password'
+k8s/scripts/run-expert-job.sh demo prod 'my-clickhouse-password'
 ```
 
 ## Experimental Skills
